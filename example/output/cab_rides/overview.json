@@ -1,1 +1,0 @@
-{"dataset": {"rows": 693071, "cols": 10, "null": 55095, "null%": 0.08, "numeric_var": {"count": 4, "variables": ["distance", "time_stamp", "price", "surge_multiplier"]}, "string_var": {"count": 6, "variables": ["cab_type", "destination", "source", "id", "product_id", "name"]}, "duplicate_row": 0, "duplicate_row_index": []}}
