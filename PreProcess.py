@@ -87,31 +87,21 @@ class PreProcess:
                     summary[i] = float(summary[i])
                 summary["null_count"] = self.data[column_name].isnull().sum()
                 summary["null_percent"] = summary["null_count"] / len(self.data)
-                summary["unique_count"] = self.data[column_name].isnull().sum()
-                summary["unique_percent"] = summary["unique_count"] / len(self.data)
-                summary["all_null"] = (
-                    1 if summary["null_percent"] == 1 else 0
-                )  # 값 전체가 결측값인 column은 all_null 값이 1로 입력된다.
-                summary["all_same"] = (
-                    1 if summary["unique_count"] == 1 else 0
-                )  # 값 전체가 동일한 column은 all_same 값이 1로 입력된다.
+                summary["all_null"] = (1 if summary["null_percent"] == 1 else 0)
                 self.eda_result["num"][column_name] = dict(summary)
             elif column_name in self.overview["dataset"]["string_var"]["variables"]:
                 ftable = dict(self.data[column_name].value_counts())
+                ftable_per = dict(self.data[column_name].value_counts()/len(self.data))
                 # json으로 저장하기 위해 형식을 변경한다. 
                 for i in ftable.keys():
                     ftable[i] = int(ftable[i])
+                for i in ftable_per.keys():
+                    ftable_per[i] = float(ftable_per[i])
                 summary = dict({"class": ftable})
+                summary['class_percent'] = ftable_per
                 summary["null_count"] = int(self.data[column_name].isnull().sum())
                 summary["null_percent"] = summary["null_count"] / len(self.data)
-                summary["unique_count"] = int(self.data[column_name].isnull().sum())
-                summary["unique_percent"] = summary["unique_count"] / len(self.data)
-                summary["all_null"] = (
-                    1 if summary["null_percent"] == 1 else 0
-                )  # 값 전체가 결측값인 column은 all_null 값이 1로 입력된다.
-                summary["all_same"] = (
-                    1 if summary["unique_count"] == 1 else 0
-                )  # 값 전체가 동일한 column은 all_same 값이 1로 입력된다.
+                summary["all_null"] = (1 if summary["null_percent"] == 1 else 0)
                 self.eda_result["str"][column_name] = dict(summary)
 
     def dqc(self):
@@ -136,15 +126,9 @@ class PreProcess:
                                 round(data_summary["mean"], 2),
                                 round(data_summary["std"], 2),
                                 data_summary["null_count"],
-                                round(
-                                    data_summary["null_percent"] * 100,
-                                    2,
-                                ),
+                                round(data_summary["null_percent"] * 100, 2),
                                 data_summary["count"],
-                                round(
-                                    data_summary["count"] / len(self.data) * 100,
-                                    2,
-                                ),
+                                round(data_summary["count"] / len(self.data) * 100, 2)
                             )
                         ).reshape(1, 10),
                         columns=[
@@ -153,6 +137,8 @@ class PreProcess:
                         ],
                     )
                 else:
+                    # class percent 자리수 해결하는 코드
+                    class_percent_tmp = dict(zip(list(data_summary['class_percent'].keys()), np.round(list(data_summary['class_percent'].values()),2)))
                     temp_df = pd.DataFrame(
                         np.array(
                             (
@@ -160,20 +146,11 @@ class PreProcess:
                                 column_type,
                                 len(data_summary["class"]),
                                 ", ".join(list(data_summary["class"].keys())),
-                                str(data_summary["class"])
-                                .replace("{", "")
-                                .replace("}", ""),
+                                str(list(class_percent_tmp.items())[:5]).replace("[","").replace("]",""),
                                 data_summary["null_count"],
-                                round(
-                                    data_summary["null_count"] / len(self.data) * 100,
-                                    2,
-                                ),
+                                round(data_summary["null_count"] / len(self.data) * 100, 2),
                                 len(self.data) - data_summary["null_count"],
-                                100
-                                - round(
-                                    data_summary["null_count"] / len(self.data) * 100,
-                                    2,
-                                ),
+                                100 - round(data_summary["null_count"] / len(self.data) * 100, 2)
                             )
                         ).reshape(1, 9),
                         columns=[
