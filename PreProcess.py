@@ -48,63 +48,64 @@ class PreProcess:
         self.data[self.data.isin(self.naList)] = np.nan
         
     def eda(self):
-        self.na_check()
         # data의 row, column 수를 확인한다.
         rows, columns = self.data.shape
         # data 내 전체 결측값을 확인한다.
-        total_null = sum(self.data.isnull().sum())
+        totalNull = sum(self.data.isnull().sum())
         # 중복되는 row가 있는지 확인한다.
-        duplicate_row = sum(self.data.duplicated())
+        duplicateRow = sum(self.data.duplicated())
         # 중복 row의 index를 확인한다.
-        duplicate_index = [
+        duplicateIdx = [
             idx
             for idx, result in self.data.duplicated().to_dict().items()
             if result is True
         ]
         # 연속형 변수를 확인한다.
-        numeric_var = list(self.data.select_dtypes(include=np.number).columns)
-        num = dict({"count": len(numeric_var), "variables": numeric_var})
+        numericVar = list(self.data.select_dtypes(include=np.number).columns)
+        num = dict({"count": len(numericVar), "variables": numericVar})
         # 범주형 변수를 확인한다.
-        string_var = list(self.data.select_dtypes(include=np.object).columns)
-        string = dict({"count": len(string_var), "variables": string_var})
+        stringVar = list(self.data.select_dtypes(include=np.object).columns)
+        string = dict({"count": len(stringVar), "variables": stringVar})
         self.overview["dataset"] = {
             "rows": rows,
             "cols": columns,
-            "null": total_null,
-            "null%": round(total_null / rows, 2),
-            "numeric_var": num,
-            "string_var": string,
-            "duplicate_row": duplicate_row,
-            "duplicate_row_index": duplicate_index,
+            "null": totalNull,
+            "null%": round(totalNull / rows, 2),
+            "numericVar": num,
+            "stringVar": string,
+            "duplicateRow": duplicateRow,
+            "duplicateRowIdx": duplicateIdx,
         }
         # 각 변수 summary값 dict 형태로 저장한다.
-        self.eda_result = dict()
-        self.eda_result["num"] = dict()
-        self.eda_result["str"] = dict()
-        for column_name in self.data.columns:
-            if column_name in self.overview["dataset"]["numeric_var"]["variables"]:
-                summary = self.data[column_name].describe()
+        self.edaResult = dict()
+        self.edaResult["num"] = dict()
+        self.edaResult["str"] = dict()
+        for columnName in self.data.columns:
+            if columnName in self.overview["dataset"]["numericVar"]["variables"]:
+                summary = self.data[columnName].describe()
                 # json으로 저장하기 위해 형식을 변경한다. 
                 for i in summary.keys():
                     summary[i] = float(summary[i])
-                summary["null_count"] = self.data[column_name].isnull().sum()
-                summary["null_percent"] = summary["null_count"] / len(self.data)
-                summary["all_null"] = (1 if summary["null_percent"] == 1 else 0)
-                self.eda_result["num"][column_name] = dict(summary)
-            elif column_name in self.overview["dataset"]["string_var"]["variables"]:
-                ftable = dict(self.data[column_name].value_counts())
-                ftable_per = dict(self.data[column_name].value_counts()/len(self.data))
+                summary["count"] = len(self.data[columnName])
+                summary["nullCount"] = self.data[columnName].isnull().sum()
+                summary["nullProp"] = summary["nullCount"] / len(self.data)
+                summary["nullOnly"] = (1 if summary["nullProp"] == 1 else 0)
+                self.edaResult["num"][columnName] = dict(summary)
+            elif columnName in self.overview["dataset"]["stringVar"]["variables"]:
+                summary = dict({"count":len(self.data[columnName])})
+                ftable = dict(self.data[columnName].value_counts())
+                ftableProp = dict(self.data[columnName].value_counts()/len(self.data))
                 # json으로 저장하기 위해 형식을 변경한다. 
                 for i in ftable.keys():
                     ftable[i] = int(ftable[i])
-                for i in ftable_per.keys():
-                    ftable_per[i] = float(ftable_per[i])
-                summary = dict({"class": ftable})
-                summary['class_percent'] = ftable_per
-                summary["null_count"] = int(self.data[column_name].isnull().sum())
-                summary["null_percent"] = summary["null_count"] / len(self.data)
-                summary["all_null"] = (1 if summary["null_percent"] == 1 else 0)
-                self.eda_result["str"][column_name] = dict(summary)
+                for i in ftableProp.keys():
+                    ftableProp[i] = float(ftableProp[i])
+                summary["class"] = ftable
+                summary['classProp'] = ftableProp
+                summary["nullCount"] = int(self.data[columnName].isnull().sum())
+                summary["nullProp"] = summary["nullCount"] / len(self.data)
+                summary["nullOnly"] = (1 if summary["nullProp"] == 1 else 0)
+                self.edaResult["str"][columnName] = dict(summary)
 
     def dqc(self):
         # dqc table 출력하기
