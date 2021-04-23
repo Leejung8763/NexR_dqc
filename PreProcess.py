@@ -110,60 +110,65 @@ class PreProcess:
     def dqc(self):
         # dqc table 출력하기
         column = [
-            ["컬럼"] * 3 + ["연속형 대상"] * 4 + ["범주형 대상"] * 4 + ["공통"] * 6,
-            ["컬럼명", "한글명", "타입", "최소값", "최대값", "평균", "표준편차", "범주 수", "범주", "범주%", 
-            "정의된 범주 외", "최빈값", "NULL값", "NULL수", "NULL%", "적재건수", "적재건수%"]
+            ["컬럼"] * 3 + ["연속형 대상"] * 7 + ["범주형 대상"] * 4 + ["공통"] * 5,
+            ["컬럼명", "한글명", "타입", 
+             "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차",
+             "범주 수", "정의된 범주 외", "정의된 범주 외%", "최빈값",
+             "NULL값", "NULL수", "NULL%", "적재건수", "적재건수%"]
         ]
         self.result = pd.DataFrame(columns=column)
-        for column_type in self.eda_result.keys():
-            for column_name in self.eda_result[column_type].keys():
-                data_summary = self.eda_result[column_type][column_name]
-                if column_type == "num":
-                    temp_df = pd.DataFrame(
+        for columnType in self.edaResult.keys():
+            for columnName in self.edaResult[columnType].keys():
+                dataSummary = self.edaResult[columnType][columnName]
+                if columnType == "num":
+                    tempDf = pd.DataFrame(
                         np.array(
                             (
-                                column_name,
-                                column_type,
-                                round(data_summary["min"], 2),
-                                round(data_summary["max"], 2),
-                                round(data_summary["mean"], 2),
-                                round(data_summary["std"], 2),
-                                data_summary["null_count"],
-                                round(data_summary["null_percent"] * 100, 2),
-                                data_summary["count"],
-                                round(data_summary["count"] / len(self.data) * 100, 2)
+                                columnName,
+                                columnType,
+                                round(dataSummary["min"], 2),
+                                round(dataSummary["25%"], 2),
+                                round(dataSummary["50%"], 2),
+                                round(dataSummary["75%"], 2),
+                                round(dataSummary["max"], 2),
+                                round(dataSummary["mean"], 2),
+                                round(dataSummary["std"], 2),
+                                dataSummary["nullCount"],
+                                round(dataSummary["nullProp"] * 100, 2),
+                                dataSummary["count"],
+                                round(dataSummary["count"] / len(self.data) * 100, 2)
                             )
-                        ).reshape(1, 10),
+                        ).reshape(1, 13),
                         columns=[
-                            ["컬럼"] * 2 + ["연속형 대상"] * 4 + ["공통"] * 4,
-                            ["컬럼명", "타입", "최소값", "최대값", "평균", "표준편차", "NULL수", "NULL%", "적재건수", "적재건수%"]
+                            ["컬럼"] * 2 + ["연속형 대상"] * 7 + ["공통"] * 4,
+                            ["컬럼명", "타입", 
+                            "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차", 
+                            "NULL수", "NULL%", "적재건수", "적재건수%"]
                         ],
                     )
                 else:
-                    # class percent 자리수 해결하는 코드
-                    class_percent_tmp = dict(zip(list(data_summary['class_percent'].keys()), np.round(list(data_summary['class_percent'].values()),2)))
-                    temp_df = pd.DataFrame(
+                    # class proportion 자리수 해결하는 코드
+                    classPropTmp = dict(zip(list(dataSummary['classProp'].keys()), np.round(list(dataSummary['classProp'].values()),2)))
+                    tempDf = pd.DataFrame(
                         np.array(
                             (
-                                column_name,
-                                column_type,
-                                len(data_summary["class"]),
-                                ", ".join(list(data_summary["class"].keys())),
-                                str(list(class_percent_tmp.items())[:5]).replace("[","").replace("]",""),
-                                data_summary["null_count"],
-                                round(data_summary["null_count"] / len(self.data) * 100, 2),
-                                len(self.data) - data_summary["null_count"],
-                                100 - round(data_summary["null_count"] / len(self.data) * 100, 2)
+                                columnName,
+                                columnType,
+                                len(dataSummary["class"]),
+                                dataSummary["nullCount"],
+                                round(dataSummary["nullCount"] / len(self.data) * 100, 2),
+                                dataSummary["count"],
                             )
-                        ).reshape(1, 9),
+                        ).reshape(1, 6),
                         columns=[
-                            ["컬럼"] * 2 + ["범주형 대상"] * 3 + ["공통"] * 4,
-                            ["컬럼명", "타입", "범주 수", "범주", "범주%", "NULL수", "NULL%", "적재건수", "적재건수%"]
+                            ["컬럼"] * 2 + ["범주형 대상"] * 1 + ["공통"] * 3,
+                            ["컬럼명", "타입",
+                             "범주 수",
+                             "NULL수", "NULL%", "적재건수"]
                         ],
                     )
-
                 self.result = pd.concat(
-                    [self.result, temp_df], ignore_index=True
+                    [self.result, tempDf], ignore_index=True
                 ).reindex(columns=column)
 
     def save(self, output_path):
