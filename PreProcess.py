@@ -4,47 +4,49 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-# 과학적 표기법(Scientific notation)을 사용하지 않는 경우
-pd.options.display.float_format = "{:.2f}".format
-
+# # 과학적 표기법(Scientific notation)을 사용하지 않는 경우
+# pd.options.display.float_format = "{:.2f}".format
 
 class PreProcess:
-    def __init__(self, input_path):
-        temp_file_name = input_path.split('/')[-1]
+
+    def __init__(self, inputPath, docsPath):
+        # 공통 결측치를 설정한다. 
+        self.naList = ["?", "na", "null", "Null", "NULL", " "]
+        addNa = input(
+            f"결측값을 추가할 수 있습니다. \n기본 설정된 결측값: {self.naList} \n추가하고 싶은 결측값을 작성해주십시오:"
+        )
+        if len(addNa) != 0:
+            self.naList += addNa.replace(" ", "").split(sep=",")
+            self.naList = list(set(self.naList))
+        print(f"현재 공통 결측값 리스트는 {self.naList} 입니다.")
+
+        fileName = inputPath.split('/')[-1]
         try:
-            if ".csv" in input_path:
-                self.data = pd.read_csv(input_path)
-                self.file_name = temp_file_name.split('.csv')[0]                
-            elif ".parquet" in input_path:
-                self.data = pq.read_pandas(input_path).to_pandas()
-                self.file_name = temp_file_name.split('.parquet')[0]
+            if ".csv" in inputPath:
+                self.data = pd.read_csv(inputPath, na_values=self.naList)
+                self.fileName = fileName.split('.csv')[0]                
+            elif ".parquet" in inputPath:
+                self.data = pq.read_pandas(inputPath).to_pandas()
+                self.fileName = fileName.split('.parquet')[0]
+            self.tableDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "테이블" in file)[0]))
+            self.colDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "컬럼" in file)[0]))
+            self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]))
             self.overview = dict()
         except:
-            print("해당 파일이 존재하지 않습니다. 경로를 확인하세요.")        
-#         try:
-#             if ".csv" in input_path:
-#                 self.data = pd.read_csv(input_path)
-#                 self.file_name = temp_file_name.split('.csv')[0]                
-#             elif ".parquet" in input_path:
-#                 print('11')
-#                 self.data = pq.read_pandas(input_path).to_pandas()
-#                 self.file_name = temp_file_name.split('.parquet')[0]
-#             self.overview = dict()
-#         except:
-#             print("해당 파일이 존재하지 않습니다. 경로를 확인하세요.")
+            print("해당 파일이 존재하지 않습니다. 경로를 확인하세요.")    
 
     def na_check(self):
         # 공통 결측치를 설정한다. 
-        self.na_list = ["?", "na", "null", "Null", "NULL", " "]
-        add_na = input(
-            f"결측값을 추가할 수 있습니다. \n기본 설정된 결측값: {self.na_list} \n추가하고 싶은 결측값을 작성해주십시오:"
+        self.naList = ["?", "na", "null", "Null", "NULL", " "]
+        addNa = input(
+            f"결측값을 추가할 수 있습니다. \n기본 설정된 결측값: {self.naList} \n추가하고 싶은 결측값을 작성해주십시오:"
         )
-        if len(add_na) != 0:
-            self.na_list += add_na.replace(" ", "").split(sep=",")
-            self.na_list = list(set(self.na_list))
+        if len(addNa) != 0:
+            self.naList += addNa.replace(" ", "").split(sep=",")
+            self.naList = list(set(self.naList))
         # 결측값을 처리한다. 
-        self.data[self.data.isin(self.na_list)] = np.nan
-
+        self.data[self.data.isin(self.naList)] = np.nan
+        
     def eda(self):
         self.na_check()
         # data의 row, column 수를 확인한다.
