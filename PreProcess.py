@@ -19,18 +19,33 @@ class PreProcess:
             self.naList += addNa.replace(" ", "").split(sep=",")
             self.naList = list(set(self.naList))
         print(f"현재 공통 결측값 리스트는 {self.naList} 입니다.")
-
         fileName = inputPath.split('/')[-1]
         try:
             if ".csv" in inputPath:
                 self.data = pd.read_csv(inputPath, na_values=self.naList)
-                self.fileName = fileName.split('.csv')[0]                
+                self.fileName = fileName.split('.csv')[0]            
             elif ".parquet" in inputPath:
                 self.data = pq.read_pandas(inputPath).to_pandas()
                 self.fileName = fileName.split('.parquet')[0]
-            self.tableDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "테이블" in file)[0]))
-            self.colDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "컬럼" in file)[0]))
-            self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]))
+            # 테이블 정의서
+            self.tableDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "테이블" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
+            self.tableDocs.columns = [i.replace("\n","") for i in self.tableDocs.columns]
+            # 컬럼 정의서
+            self.colDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "컬럼" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
+            self.colDocs.columns = [i.replace("\n","") for i in self.colDocs.columns]
+            self.colDocs = pd.merge(self.colDocs, self.tableDocs[["시스템명(영문)", "스키마명" , "테이블명(영문)", "DB 유형"]], on=["시스템명(영문)", "스키마명" , "테이블명(영문)"], how="left")
+            self.colDocs["데이터타입"] = self.colDocs["데이터타입"].str.upper()
+            # 코드 정의서
+            self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
+            # 데이터 타입 정의서
+            self.dtypeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "Datatype" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
+            self.dtypeDocs["DataType"] = self.dtypeDocs["DataType"].str.upper()
+            # 데이터 형식 변환
+            self.colDocs = pd.merge(self.colDocs, self.dtypeDocs, left_on=["데이터타입","DB 유형"], right_on=["DataType", "DBMS"], how="left")
+            self.colDocs = self.colDocs.drop(["NewDataType","DBMS","DataType"], axis=1)
+            self.colDocs = self.colDocs.drop_duplicates()
+            dbType = dict(zip(self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, '컬럼명'], self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, 'PyDataType']))
+            self.data = self.data.astype(dbType, errors="ignore")
             self.overview = dict()
         except:
             print("해당 파일이 존재하지 않습니다. 경로를 확인하세요.")    
