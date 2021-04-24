@@ -79,7 +79,7 @@ class PreProcess:
         numericVar = list(self.data.select_dtypes(include=np.number).columns)
         num = dict({"count": len(numericVar), "variables": numericVar})
         # 범주형 변수를 확인한다.
-        stringVar = list(self.data.select_dtypes(include=np.object).columns)
+        stringVar = list(self.data.select_dtypes(include="string").columns)
         string = dict({"count": len(stringVar), "variables": stringVar})
         self.overview["dataset"] = {
             "rows": rows,
@@ -91,23 +91,25 @@ class PreProcess:
             "duplicateRow": duplicateRow,
             "duplicateRowIdx": duplicateIdx,
         }
-        # 각 변수 summary값 dict 형태로 저장한다.
+       # 각 변수 summary값 dict 형태로 저장한다.
         self.edaResult = dict()
         self.edaResult["num"] = dict()
         self.edaResult["str"] = dict()
         for columnName in self.data.columns:
             if columnName in self.overview["dataset"]["numericVar"]["variables"]:
-                summary = self.data[columnName].describe()
+                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"속성명(컬럼한글명)"].unique()[0]})
+                summaryTmp = self.data[columnName].describe()
                 # json으로 저장하기 위해 형식을 변경한다. 
-                for i in summary.keys():
-                    summary[i] = float(summary[i])
+                for i in summaryTmp.keys():
+                    summary[i] = float(summaryTmp[i])
                 summary["count"] = len(self.data[columnName])
                 summary["nullCount"] = self.data[columnName].isnull().sum()
                 summary["nullProp"] = summary["nullCount"] / len(self.data)
                 summary["nullOnly"] = (1 if summary["nullProp"] == 1 else 0)
                 self.edaResult["num"][columnName] = dict(summary)
             elif columnName in self.overview["dataset"]["stringVar"]["variables"]:
-                summary = dict({"count":len(self.data[columnName])})
+                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"속성명(컬럼한글명)"].unique()[0]})
+                summary["count"] = len(self.data[columnName])
                 ftable = dict(self.data[columnName].value_counts())
                 ftableProp = dict(self.data[columnName].value_counts()/len(self.data))
                 # json으로 저장하기 위해 형식을 변경한다. 
@@ -121,7 +123,7 @@ class PreProcess:
                 summary["nullProp"] = summary["nullCount"] / len(self.data)
                 summary["nullOnly"] = (1 if summary["nullProp"] == 1 else 0)
                 self.edaResult["str"][columnName] = dict(summary)
-
+                
     def dqc(self):
         # dqc table 출력하기
         column = [
@@ -140,6 +142,7 @@ class PreProcess:
                         np.array(
                             (
                                 columnName,
+                                dataSummary["korName"],
                                 columnType,
                                 round(dataSummary["min"], 2),
                                 round(dataSummary["25%"], 2),
@@ -151,14 +154,13 @@ class PreProcess:
                                 dataSummary["nullCount"],
                                 round(dataSummary["nullProp"] * 100, 2),
                                 dataSummary["count"],
-                                round(dataSummary["count"] / len(self.data) * 100, 2)
                             )
                         ).reshape(1, 13),
                         columns=[
-                            ["컬럼"] * 2 + ["연속형 대상"] * 7 + ["공통"] * 4,
-                            ["컬럼명", "타입", 
+                            ["컬럼"] * 3 + ["연속형 대상"] * 7 + ["공통"] * 3,
+                            ["컬럼명", "한글명", "타입", 
                             "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차", 
-                            "NULL수", "NULL%", "적재건수", "적재건수%"]
+                            "NULL수", "NULL%", "적재건수"]
                         ],
                     )
                 else:
@@ -168,17 +170,19 @@ class PreProcess:
                         np.array(
                             (
                                 columnName,
+                                dataSummary["korName"],
                                 columnType,
                                 len(dataSummary["class"]),
+                                (str(list(dataSummary['class'].items())[0]).replace(")", "").replace("(", "").replace(",", ":") if len(list(dataSummary['class'].items())) > 0 else np.nan),
                                 dataSummary["nullCount"],
                                 round(dataSummary["nullCount"] / len(self.data) * 100, 2),
                                 dataSummary["count"],
                             )
-                        ).reshape(1, 6),
+                        ).reshape(1, 8),
                         columns=[
-                            ["컬럼"] * 2 + ["범주형 대상"] * 1 + ["공통"] * 3,
-                            ["컬럼명", "타입",
-                             "범주 수",
+                            ["컬럼"] * 3 + ["범주형 대상"] * 2 + ["공통"] * 3,
+                            ["컬럼명", "한글명", "타입",
+                             "범주 수", "최빈값",
                              "NULL수", "NULL%", "적재건수"]
                         ],
                     )
