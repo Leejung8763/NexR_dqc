@@ -98,12 +98,12 @@ class PreProcess:
         for columnName in self.data.columns:
             if columnName in self.overview["dataset"]["numericVar"]["variables"]:
                 summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"속성명(컬럼한글명)"].unique()[0]})
-                summaryTmp = self.data[columnName].describe()
+                summaryTmp = self.data[columnName].describe().fillna(0)
                 # json으로 저장하기 위해 형식을 변경한다. 
                 for i in summaryTmp.keys():
                     summary[i] = float(summaryTmp[i])
                 summary["count"] = len(self.data[columnName])
-                summary["nullCount"] = self.data[columnName].isnull().sum()
+                summary["nullCount"] = int(self.data[columnName].isnull().sum())
                 summary["nullProp"] = summary["nullCount"] / len(self.data)
                 summary["nullOnly"] = (1 if summary["nullProp"] == 1 else 0)
                 self.edaResult["num"][columnName] = dict(summary)
@@ -190,15 +190,26 @@ class PreProcess:
                     [self.result, tempDf], ignore_index=True
                 ).reindex(columns=column)
 
-    def save(self, output_path):
-        if not os.path.exists(os.path.join(output_path, self.file_name)):
-            os.makedirs(os.path.join(output_path, self.file_name))
+    def save(self, outputPath):
+        if not os.path.exists(os.path.join(outputPath, self.fileName)):
+            os.makedirs(os.path.join(outputPath, self.fileName))
         else:
             print('지정된 저장폴더가 이미 존재합니다.')
             raise SystemExit           
             
-        json.dump(self.overview, open(f"{os.path.join(output_path, self.file_name)}/overview.json", "w"))
-        json.dump(self.eda_result, open(f"{os.path.join(output_path, self.file_name)}/eda_result.json", "w"))
-        self.result.to_excel(f"{os.path.join(output_path, self.file_name)}/dqc_table.xlsx")
+        json.dump(self.overview, open(f"{os.path.join(outputPath, self.fileName)}/overview.json", "w"))
+        json.dump(self.edaResult, open(f"{os.path.join(outputPath, self.fileName)}/edaResult.json", "w"))
+        
+        self.result.to_excel(f"{os.path.join(outputPath, self.fileName)}/dqcTable.xlsx")
+        writer = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName)}/dqcTable.xlsx", engine='xlsxwriter')
 
-        print("저장완료")
+        self.result.to_excel(writer, sheet_name='Summary', encoding='utf-8-sig')
+        for colname in self.edaResult["str"]:
+            tmp = pd.DataFrame(self.edaResult["str"][colname]) if len(self.edaResult["str"][colname]["class"]) > 0 else pd.DataFrame([self.edaResult["str"][colname]])    
+            tmp = tmp.reset_index(drop=False).rename(columns={"index":"class", "class":"classCount"})
+            tmp = tmp.loc[:, ["korName", "count", "class", "classCount", "classProp", "nullCount", "nullProp", "nullOnly"]]
+            if tmp.nullOnly[0] == 1:
+                tmp[["class", "classCount", "classProp"]] = np.nan
+            tmp.to_excel(writer, sheet_name=colname, encoding='utf-8-sig', index=False)
+        #close the Pandas Excel writer and output the Excel file
+        writer.save()
