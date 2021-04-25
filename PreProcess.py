@@ -37,6 +37,7 @@ class PreProcess:
             self.colDocs["데이터타입"] = self.colDocs["데이터타입"].str.upper()
             # 코드 정의서
             self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
+            self.codeDocs.columns = [i.replace("\n","") for i in self.codeDocs.columns]
             # 데이터 타입 정의서
             self.dtypeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "Datatype" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
             self.dtypeDocs["DataType"] = self.dtypeDocs["DataType"].str.upper()
