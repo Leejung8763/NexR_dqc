@@ -98,7 +98,7 @@ class PreProcess:
         self.edaResult["str"] = dict()
         for columnName in self.data.columns:
             if columnName in self.overview["dataset"]["numericVar"]["variables"]:
-                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"속성명(컬럼한글명)"].unique()[0]})
+                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"속성명(컬럼한글명)"].tolist()[0]})
                 summaryTmp = self.data[columnName].describe().fillna(0)
                 # json으로 저장하기 위해 형식을 변경한다. 
                 for i in summaryTmp.keys():
@@ -109,7 +109,9 @@ class PreProcess:
                 summary["nullOnly"] = (1 if summary["nullProp"] == 1 else 0)
                 self.edaResult["num"][columnName] = dict(summary)
             elif columnName in self.overview["dataset"]["stringVar"]["variables"]:
-                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"속성명(컬럼한글명)"].unique()[0]})
+                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"속성명(컬럼한글명)"].tolist()[0]})
+                summary["PK"] = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"PK여부"].tolist()[0]
+                summary["FK"] = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"FK여부"].tolist()[0]
                 summary["count"] = len(self.data[columnName])
                 ftable = dict(self.data[columnName].value_counts())
                 ftableProp = dict(self.data[columnName].value_counts()/len(self.data))
@@ -206,7 +208,7 @@ class PreProcess:
 
         self.result.to_excel(writer, sheet_name='Summary', encoding='utf-8-sig')
         for colname in self.edaResult["str"]:
-            tmp = pd.DataFrame(self.edaResult["str"][colname]) if len(self.edaResult["str"][colname]["class"]) > 0 else pd.DataFrame([self.edaResult["str"][colname]])    
+            tmp = pd.DataFrame(self.edaResult["str"][colname]) if len(self.edaResult["str"][colname]["class"]) > 0 else pd.DataFrame([self.edaResult["str"][colname]])
             tmp = tmp.reset_index(drop=False).rename(columns={"index":"class", "class":"classCount"})
             tmp = tmp.loc[:, ["korName", "count", "class", "classCount", "classProp", "nullCount", "nullProp", "nullOnly"]]
             if tmp.nullOnly[0] == 1:
