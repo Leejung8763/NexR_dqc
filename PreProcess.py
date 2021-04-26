@@ -19,33 +19,33 @@ class PreProcess:
             self.naList += addNa.replace(" ", "").split(sep=",")
             self.naList = list(set(self.naList))
         print(f"현재 공통 결측값 리스트는 {self.naList} 입니다.")
-        fileName = inputPath.split('/')[-1]
+        fileName = inputPath.split("/")[-1]
         try:
             if ".csv" in inputPath:
                 self.data = pd.read_csv(inputPath, na_values=self.naList)
-                self.fileName = fileName.split('.csv')[0]            
+                self.fileName = fileName.split(".csv")[0]            
             elif ".parquet" in inputPath:
                 self.data = pq.read_pandas(inputPath).to_pandas()
-                self.fileName = fileName.split('.parquet')[0]
+                self.fileName = fileName.split(".parquet")[0]
             # 테이블 정의서
-            self.tableDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "테이블" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
+            self.tableDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "테이블" in file)[0]), usecols=lambda x: "Unnamed" not in x)
             self.tableDocs.columns = [i.replace("\n","") for i in self.tableDocs.columns]
             # 컬럼 정의서
-            self.colDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "컬럼" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
+            self.colDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "컬럼" in file)[0]), usecols=lambda x: "Unnamed" not in x)
             self.colDocs.columns = [i.replace("\n","") for i in self.colDocs.columns]
             self.colDocs = pd.merge(self.colDocs, self.tableDocs[["시스템명(영문)", "스키마명" , "테이블명(영문)", "DB 유형"]], on=["시스템명(영문)", "스키마명" , "테이블명(영문)"], how="left")
             self.colDocs["데이터타입"] = self.colDocs["데이터타입"].str.upper()
             # 코드 정의서
-            self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
+            self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]), usecols=lambda x: "Unnamed" not in x)
             self.codeDocs.columns = [i.replace("\n","") for i in self.codeDocs.columns]
             # 데이터 타입 정의서
-            self.dtypeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "Datatype" in file)[0]), usecols=lambda x: 'Unnamed' not in x)
+            self.dtypeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "Datatype" in file)[0]), usecols=lambda x: "Unnamed" not in x)
             self.dtypeDocs["DataType"] = self.dtypeDocs["DataType"].str.upper()
             # 데이터 형식 변환
             self.colDocs = pd.merge(self.colDocs, self.dtypeDocs, left_on=["데이터타입","DB 유형"], right_on=["DataType", "DBMS"], how="left")
             self.colDocs = self.colDocs.drop(["NewDataType","DBMS","DataType"], axis=1)
             self.colDocs = self.colDocs.drop_duplicates()
-            dbType = dict(zip(self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, '컬럼명'], self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, 'PyDataType']))
+            dbType = dict(zip(self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, "컬럼명"], self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, "PyDataType"]))
             self.data = self.data.astype(dbType, errors="ignore")
             self.overview = dict()
         except:
@@ -62,7 +62,6 @@ class PreProcess:
             self.naList = list(set(self.naList))
         # 결측값을 처리한다. 
         self.data[self.data.isin(self.naList)] = np.nan
-        
     def eda(self):
         # data의 row, column 수를 확인한다.
         rows, columns = self.data.shape
@@ -92,7 +91,7 @@ class PreProcess:
             "duplicateRow": duplicateRow,
             "duplicateRowIdx": duplicateIdx,
         }
-       # 각 변수 summary값 dict 형태로 저장한다.
+        # 각 변수 summary값 dict 형태로 저장한다.
         self.edaResult = dict()
         self.edaResult["num"] = dict()
         self.edaResult["str"] = dict()
@@ -120,8 +119,10 @@ class PreProcess:
                     ftable[i] = int(ftable[i])
                 for i in ftableProp.keys():
                     ftableProp[i] = float(ftableProp[i])
-                summary["class"] = ftable
-                summary['classProp'] = ftableProp
+                summary["classCount_Def"] = {item : ftable.get(item) for item in set(ftable)&set(codeCheckDocs["코드값"])}
+                summary['classProp_Def'] = {item : ftableProp.get(item) for item in set(ftable)&set(codeCheckDocs["코드값"])}
+                summary["classCount_Undef"] = {item : ftable.get(item) for item in set(ftable)-set(codeCheckDocs["코드값"])}
+                summary['classProp_Undef'] = {item : ftableProp.get(item) for item in set(ftable)-set(codeCheckDocs["코드값"])}
                 summary["nullCount"] = int(self.data[columnName].isnull().sum())
                 summary["nullProp"] = summary["nullCount"] / len(self.data)
                 summary["nullOnly"] = (1 if summary["nullProp"] == 1 else 0)
@@ -167,16 +168,16 @@ class PreProcess:
                         ],
                     )
                 else:
-                    # class proportion 자리수 해결하는 코드
-                    classPropTmp = dict(zip(list(dataSummary['classProp'].keys()), np.round(list(dataSummary['classProp'].values()),2)))
+#                     # class proportion 자리수 해결하는 코드
+#                     classPropTmp = dict(zip(list(dataSummary["classProp"].keys()), np.round(list(dataSummary["classProp"].values()),2)))
                     tempDf = pd.DataFrame(
                         np.array(
                             (
                                 columnName,
                                 dataSummary["korName"],
                                 columnType,
-                                len(dataSummary["class"]),
-                                (str(list(dataSummary['class'].items())[0]).replace(")", "").replace("(", "").replace(",", ":") if len(list(dataSummary['class'].items())) > 0 else np.nan),
+                                len(dataSummary["classCount_Def"]) + len(dataSummary["classCount_Undef"]),
+                                (str(list(dataSummary["classCount_Def"].items())[0]).replace(")", "").replace("(", "").replace(",", ":") if len(list(dataSummary["classCount_Def"].items())) > 0 else np.nan),
                                 dataSummary["nullCount"],
                                 round(dataSummary["nullCount"] / len(self.data) * 100, 2),
                                 dataSummary["count"],
@@ -192,27 +193,27 @@ class PreProcess:
                 self.result = pd.concat(
                     [self.result, tempDf], ignore_index=True
                 ).reindex(columns=column)
-
     def save(self, outputPath):
         if not os.path.exists(os.path.join(outputPath, self.fileName)):
             os.makedirs(os.path.join(outputPath, self.fileName))
         else:
-            print('지정된 저장폴더가 이미 존재합니다.')
+            print("지정된 저장폴더가 이미 존재합니다.")
             raise SystemExit           
             
         json.dump(self.overview, open(f"{os.path.join(outputPath, self.fileName)}/overview.json", "w"))
         json.dump(self.edaResult, open(f"{os.path.join(outputPath, self.fileName)}/edaResult.json", "w"))
         
         self.result.to_excel(f"{os.path.join(outputPath, self.fileName)}/dqcTable.xlsx")
-        writer = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName)}/dqcTable.xlsx", engine='xlsxwriter')
+        writer = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName)}/dqcTable.xlsx", engine="xlsxwriter")
 
-        self.result.to_excel(writer, sheet_name='Summary', encoding='utf-8-sig')
-        for colname in self.edaResult["str"]:
-            tmp = pd.DataFrame(self.edaResult["str"][colname]) if len(self.edaResult["str"][colname]["class"]) > 0 else pd.DataFrame([self.edaResult["str"][colname]])
-            tmp = tmp.reset_index(drop=False).rename(columns={"index":"class", "class":"classCount"})
-            tmp = tmp.loc[:, ["korName", "count", "class", "classCount", "classProp", "nullCount", "nullProp", "nullOnly"]]
-            if tmp.nullOnly[0] == 1:
-                tmp[["class", "classCount", "classProp"]] = np.nan
-            tmp.to_excel(writer, sheet_name=colname, encoding='utf-8-sig', index=False)
+        self.result.to_excel(writer, sheet_name="Summary", encoding="utf-8-sig")
+        for colname in self.edaResult["str"].keys():
+            if (self.edaResult["str"][colname]["PK"]=="N")&(self.edaResult["str"][colname]["FK"]=="N"):
+                tmp = pd.DataFrame(self.edaResult["str"][colname]) if len(self.edaResult["str"][colname]["classCount_Def"]) > 0 else pd.DataFrame([self.edaResult["str"][colname]])
+                tmp = tmp.reset_index(drop=False).rename(columns={"index":"class"})
+                tmp = tmp.loc[:, ["korName", "count", "class", "classCount_Def", "classProp_Def", "classCount_Undef", "classProp_Undef", "nullCount", "nullProp", "nullOnly"]]
+                if tmp.nullOnly[0] == 1:
+                    tmp[["class", "classCount", "classProp"]] = np.nan
+                tmp.to_excel(writer, sheet_name=colname, encoding="utf-8-sig", index=False)
         #close the Pandas Excel writer and output the Excel file
         writer.save()
