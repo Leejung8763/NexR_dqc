@@ -3,6 +3,7 @@ import json
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+import copy
 
 # # 과학적 표기법(Scientific notation)을 사용하지 않는 경우
 # pd.options.display.float_format = "{:.2f}".format
@@ -44,7 +45,7 @@ class PreProcess:
 
         # data loading
         if ".csv" in inputPath:
-            self.data = pd.read_csv(inputPath, parse_dates=[key for key, value in self.dbType.items() if value=="datetime64"], infer_datetime_format=True, na_values=self.naList)            
+            self.data = pd.read_csv(inputPath, dtype={key: value for key, value in self.dbType.items() if value=="string"}, parse_dates=[key for key, value in self.dbType.items() if value=="datetime64"], infer_datetime_format=True, na_values=self.naList)            
 #             elif ".parquet" in inputPath:
 #                 self.data = pq.read_pandas(inputPath).to_pandas()
 #                 self.fileName = fileName.split(".parquet")[0]
@@ -99,40 +100,39 @@ class PreProcess:
         self.edaResult = dict()
         self.edaResult["num"] = dict()
         self.edaResult["str"] = dict()
-        for columnName in self.data.columns:
-            if columnName in self.overview["dataset"]["numericVar"]["variables"]:
-                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"속성명(컬럼한글명)"].tolist()[0]})
-                summaryTmp = self.data[columnName].describe().fillna(0)
+        for colName in self.data.columns:
+            if colName in self.overview["dataset"]["numericVar"]["variables"]:
+                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==colName),"속성명(컬럼한글명)"].tolist()[0]})
+                summaryTmp = self.data[colName].describe().fillna(0)
                 # json으로 저장하기 위해 형식을 변경한다. 
                 for i in summaryTmp.keys():
                     summary[i] = float(summaryTmp[i])
-                summary["count"] = len(self.data[columnName])
-                summary["nullCount"] = int(self.data[columnName].isnull().sum())
+                summary["count"] = len(self.data[colName])
+                summary["nullCount"] = int(self.data[colName].isnull().sum())
                 summary["nullProp"] = summary["nullCount"] / len(self.data)
                 summary["nullOnly"] = (1 if summary["nullProp"] == 1 else 0)
-                self.edaResult["num"][columnName] = dict(summary)
-            elif columnName in self.overview["dataset"]["stringVar"]["variables"]:
-                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"속성명(컬럼한글명)"].tolist()[0]})
-                summary["PK"] = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"PK여부"].tolist()[0]
-                summary["FK"] = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName),"FK여부"].tolist()[0]
-                summary["count"] = len(self.data[columnName])
-                ftable = dict(self.data[columnName].value_counts())
-                ftableProp = dict(self.data[columnName].value_counts()/len(self.data))
+                self.edaResult["num"][colName] = dict(summary)
+            elif colName in self.overview["dataset"]["stringVar"]["variables"]:
+                summary = dict({"korName":self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==colName),"속성명(컬럼한글명)"].tolist()[0]})
+                summary["PK"] = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==colName),"PK여부"].tolist()[0]
+                summary["FK"] = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==colName),"FK여부"].tolist()[0]
+                summary["count"] = len(self.data[colName])
+                ftable = dict(self.data[colName].value_counts())
+                ftableProp = dict(self.data[colName].value_counts()/len(self.data))
                 # json으로 저장하기 위해 형식을 변경한다. 
                 for i in ftable.keys():
                     ftable[i] = int(ftable[i])
                 for i in ftableProp.keys():
                     ftableProp[i] = float(ftableProp[i])
-                codeCheckCat = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName), "코드대분류(그룹코드ID)"].tolist()[0]
+                codeCheckCat = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==colName), "코드대분류(그룹코드ID)"].tolist()[0]
                 codeCheckDocs = self.codeDocs[self.codeDocs["코드대분류(그룹코드ID)"]==codeCheckCat]
-                summary["classCount_Def"] = {item : ftable.get(item) for item in set(ftable)&set(codeCheckDocs["코드값"])}
-                summary['classProp_Def'] = {item : ftableProp.get(item) for item in set(ftable)&set(codeCheckDocs["코드값"])}
-                summary["classCount_Undef"] = {item : ftable.get(item) for item in set(ftable)-set(codeCheckDocs["코드값"])}
-                summary['classProp_Undef'] = {item : ftableProp.get(item) for item in set(ftable)-set(codeCheckDocs["코드값"])}
-                summary["nullCount"] = int(self.data[columnName].isnull().sum())
+                summary["class"] = list(codeCheckDocs["코드값"].unique())
+                summary["classCount"] = ftable
+                summary['classProp'] = ftableProp
+                summary["nullCount"] = int(self.data[colName].isnull().sum())
                 summary["nullProp"] = summary["nullCount"] / len(self.data)
                 summary["nullOnly"] = (1 if summary["nullProp"] == 1 else 0)
-                self.edaResult["str"][columnName] = dict(summary)
+                self.edaResult["str"][colName] = dict(summary)
                 
     def dqc(self):
         # dqc table 출력하기
@@ -145,13 +145,13 @@ class PreProcess:
         ]
         self.result = pd.DataFrame(columns=column)
         for columnType in self.edaResult.keys():
-            for columnName in self.edaResult[columnType].keys():
-                dataSummary = self.edaResult[columnType][columnName]
+            for colName in self.edaResult[columnType].keys():
+                dataSummary = self.edaResult[columnType][colName]
                 if columnType == "num":
                     tempDf = pd.DataFrame(
                         np.array(
                             (
-                                columnName,
+                                colName,
                                 dataSummary["korName"],
                                 columnType,
                                 round(dataSummary["min"], 2),
@@ -179,11 +179,11 @@ class PreProcess:
                     tempDf = pd.DataFrame(
                         np.array(
                             (
-                                columnName,
+                                colName,
                                 dataSummary["korName"],
                                 columnType,
-                                len(dataSummary["classCount_Def"]) + len(dataSummary["classCount_Undef"]),
-                                (str(list(dataSummary["classCount_Def"].items())[0]).replace(")", "").replace("(", "").replace(",", ":") if len(list(dataSummary["classCount_Def"].items())) > 0 else np.nan),
+                                len(dataSummary["classCount"]),
+                                re.sub("\(|\)", "", str(list(dataSummary["classCount"].items())[0])) if len(list(dataSummary["classCount"].items())) > 0 else "",
                                 dataSummary["nullCount"],
                                 round(dataSummary["nullCount"] / len(self.data) * 100, 2),
                                 dataSummary["count"],
@@ -213,13 +213,25 @@ class PreProcess:
         writer = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName)}/dqcTable.xlsx", engine="xlsxwriter")
 
         self.result.to_excel(writer, sheet_name="Summary", encoding="utf-8-sig")
-        for colname in self.edaResult["str"].keys():
-            if (self.edaResult["str"][colname]["PK"]=="N")&(self.edaResult["str"][colname]["FK"]=="N"):
-                tmp = pd.DataFrame(self.edaResult["str"][colname]) if len(self.edaResult["str"][colname]["classCount_Def"]) > 0 else pd.DataFrame([self.edaResult["str"][colname]])
-                tmp = tmp.reset_index(drop=False).rename(columns={"index":"class"})
-                tmp = tmp.loc[:, ["korName", "count", "class", "classCount_Def", "classProp_Def", "classCount_Undef", "classProp_Undef", "nullCount", "nullProp", "nullOnly"]]
-                if tmp.nullOnly[0] == 1:
-                    tmp[["class", "classCount", "classProp"]] = np.nan
-                tmp.to_excel(writer, sheet_name=colname, encoding="utf-8-sig", index=False)
+        for colName in self.edaResult["str"].keys():
+            if (self.edaResult["str"][colName]["PK"]=="N")&(self.edaResult["str"][colName]["FK"]=="N"):
+                edaResult = copy.copy(self.edaResult["str"][colName])
+                edaResult.pop("class")
+                freqTable = pd.DataFrame(edaResult) if len(edaResult["classCount"]) > 0 else pd.DataFrame([edaResult])
+                freqTable = freqTable.reset_index(drop=False).rename(columns={"index":"class"})
+                freqTable = freqTable.loc[:, ["korName", "count", "class", "classCount", "classProp", "nullCount", "nullProp", "nullOnly"]]
+                if len(self.edaResult["str"][colName]["class"])>0 :
+                    freqTable.insert(3, "defined", [1 if i in self.edaResult["str"][colName]["class"] else 0 for i in freqTable["class"]]) ## 속도 개선 여지 존재
+                if freqTable.nullOnly[0] == 1:
+                    freqTable[["class", "classCount", "classProp"]] = np.nan
+                freqTable.to_excel(writer, sheet_name=colName, encoding="utf-8-sig", index=False)
+                writeRow = len(freqTable)+2
+                # 각 범주별 연속형 변수 summary
+                if freqTable.nullOnly[0] == 0:
+                    for numColName in self.edaResult["num"].keys():
+                        summaryTable = self.data.groupby(colName).describe().reset_index(drop=False).rename(columns={colName:"class"})
+                        summaryTable = summaryTable.loc[:, [("class",""),("PWD_ERR_TMSCNT","min"),("PWD_ERR_TMSCNT","25%"),("PWD_ERR_TMSCNT","50%"),("PWD_ERR_TMSCNT","75%"),("PWD_ERR_TMSCNT","max"),("PWD_ERR_TMSCNT","mean"),("PWD_ERR_TMSCNT","std")]]
+                        summaryTable.to_excel(writer, sheet_name=colName, encoding="utf-8-sig", startrow=writeRow)
+                        writeRow += len(summaryTable)+2
         #close the Pandas Excel writer and output the Excel file
         writer.save()
