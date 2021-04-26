@@ -26,12 +26,12 @@ class PreProcess:
         self.tableDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "테이블" in file)[0]), usecols=lambda x: "Unnamed" not in x)
         self.tableDocs.columns = [i.replace("\n","") for i in self.tableDocs.columns]
         # 컬럼 정의서
-        self.colDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "컬럼" in file)[0]), usecols=lambda x: "Unnamed" not in x)
+        self.colDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "컬럼" in file)[0]), usecols=lambda x: "Unnamed" not in x, dtype={"코드대분류\n(그룹코드ID)":"string"})
         self.colDocs.columns = [i.replace("\n","") for i in self.colDocs.columns]
         self.colDocs = pd.merge(self.colDocs, self.tableDocs[["시스템명(영문)", "스키마명" , "테이블명(영문)", "DB 유형"]], on=["시스템명(영문)", "스키마명" , "테이블명(영문)"], how="left")
         self.colDocs["데이터타입"] = self.colDocs["데이터타입"].str.upper()
         # 코드 정의서
-        self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]), usecols=lambda x: "Unnamed" not in x)
+        self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]), usecols=lambda x: "Unnamed" not in x, dtype={"코드값":"string", "코드대분류\n(그룹코드ID)":"string"})
         self.codeDocs.columns = [i.replace("\n","") for i in self.codeDocs.columns]
         # 데이터 타입 정의서
         self.dtypeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "Datatype" in file)[0]), usecols=lambda x: "Unnamed" not in x)
@@ -124,7 +124,7 @@ class PreProcess:
                 for i in ftableProp.keys():
                     ftableProp[i] = float(ftableProp[i])
                 codeCheckCat = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName), "코드대분류(그룹코드ID)"].tolist()[0]
-                codeCheckDocs = self.codeDocs[self.codeDocs["코드 대분류(그룹코드ID)"]==codeCheckCat]
+                codeCheckDocs = self.codeDocs[self.codeDocs["코드대분류(그룹코드ID)"]==codeCheckCat]
                 summary["classCount_Def"] = {item : ftable.get(item) for item in set(ftable)&set(codeCheckDocs["코드값"])}
                 summary['classProp_Def'] = {item : ftableProp.get(item) for item in set(ftable)&set(codeCheckDocs["코드값"])}
                 summary["classCount_Undef"] = {item : ftable.get(item) for item in set(ftable)-set(codeCheckDocs["코드값"])}
