@@ -1,4 +1,4 @@
-import os
+import os, re
 import json
 import numpy as np
 import pandas as pd
@@ -20,36 +20,39 @@ class PreProcess:
             self.naList = list(set(self.naList))
         print(f"현재 공통 결측값 리스트는 {self.naList} 입니다.")
         fileName = inputPath.split("/")[-1]
-        try:
-            if ".csv" in inputPath:
-                self.data = pd.read_csv(inputPath, na_values=self.naList)
-                self.fileName = fileName.split(".csv")[0]            
-            elif ".parquet" in inputPath:
-                self.data = pq.read_pandas(inputPath).to_pandas()
-                self.fileName = fileName.split(".parquet")[0]
-            # 테이블 정의서
-            self.tableDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "테이블" in file)[0]), usecols=lambda x: "Unnamed" not in x)
-            self.tableDocs.columns = [i.replace("\n","") for i in self.tableDocs.columns]
-            # 컬럼 정의서
-            self.colDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "컬럼" in file)[0]), usecols=lambda x: "Unnamed" not in x)
-            self.colDocs.columns = [i.replace("\n","") for i in self.colDocs.columns]
-            self.colDocs = pd.merge(self.colDocs, self.tableDocs[["시스템명(영문)", "스키마명" , "테이블명(영문)", "DB 유형"]], on=["시스템명(영문)", "스키마명" , "테이블명(영문)"], how="left")
-            self.colDocs["데이터타입"] = self.colDocs["데이터타입"].str.upper()
-            # 코드 정의서
-            self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]), usecols=lambda x: "Unnamed" not in x)
-            self.codeDocs.columns = [i.replace("\n","") for i in self.codeDocs.columns]
-            # 데이터 타입 정의서
-            self.dtypeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "Datatype" in file)[0]), usecols=lambda x: "Unnamed" not in x)
-            self.dtypeDocs["DataType"] = self.dtypeDocs["DataType"].str.upper()
-            # 데이터 형식 변환
-            self.colDocs = pd.merge(self.colDocs, self.dtypeDocs, left_on=["데이터타입","DB 유형"], right_on=["DataType", "DBMS"], how="left")
-            self.colDocs = self.colDocs.drop(["NewDataType","DBMS","DataType"], axis=1)
-            self.colDocs = self.colDocs.drop_duplicates()
-            dbType = dict(zip(self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, "컬럼명"], self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, "PyDataType"]))
-            self.data = self.data.astype(dbType, errors="ignore")
-            self.overview = dict()
-        except:
-            print("해당 파일이 존재하지 않습니다. 경로를 확인하세요.")    
+        self.fileName = re.split(".csv|.parquet", fileName)[0]
+#         try:
+        # 테이블 정의서
+        self.tableDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "테이블" in file)[0]), usecols=lambda x: "Unnamed" not in x)
+        self.tableDocs.columns = [i.replace("\n","") for i in self.tableDocs.columns]
+        # 컬럼 정의서
+        self.colDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "컬럼" in file)[0]), usecols=lambda x: "Unnamed" not in x)
+        self.colDocs.columns = [i.replace("\n","") for i in self.colDocs.columns]
+        self.colDocs = pd.merge(self.colDocs, self.tableDocs[["시스템명(영문)", "스키마명" , "테이블명(영문)", "DB 유형"]], on=["시스템명(영문)", "스키마명" , "테이블명(영문)"], how="left")
+        self.colDocs["데이터타입"] = self.colDocs["데이터타입"].str.upper()
+        # 코드 정의서
+        self.codeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "코드" in file)[0]), usecols=lambda x: "Unnamed" not in x)
+        self.codeDocs.columns = [i.replace("\n","") for i in self.codeDocs.columns]
+        # 데이터 타입 정의서
+        self.dtypeDocs = pd.read_excel(os.path.join(docsPath, list(file for file in os.listdir(docsPath) if "Datatype" in file)[0]), usecols=lambda x: "Unnamed" not in x)
+        self.dtypeDocs["DataType"] = self.dtypeDocs["DataType"].str.upper()
+        # 데이터 형식 변환
+        self.colDocs = pd.merge(self.colDocs, self.dtypeDocs, left_on=["데이터타입","DB 유형"], right_on=["DataType", "DBMS"], how="left")
+        self.colDocs = self.colDocs.drop(["NewDataType","DBMS","DataType"], axis=1)
+        self.colDocs = self.colDocs.drop_duplicates()
+        self.dbType = dict(zip(self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, "컬럼명"], self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, "PyDataType"]))
+
+        # data loading
+        if ".csv" in inputPath:
+            self.data = pd.read_csv(inputPath, parse_dates=[key for key, value in self.dbType.items() if value=="datetime64"], infer_datetime_format=True, na_values=self.naList)            
+#             elif ".parquet" in inputPath:
+#                 self.data = pq.read_pandas(inputPath).to_pandas()
+#                 self.fileName = fileName.split(".parquet")[0]
+
+        self.data = self.data.astype(self.dbType, errors="ignore")
+        self.overview = dict()
+#         except:
+#             print("해당 파일이 존재하지 않습니다. 경로를 확인하세요.")    
 
     def na_check(self):
         # 공통 결측치를 설정한다. 
@@ -62,6 +65,7 @@ class PreProcess:
             self.naList = list(set(self.naList))
         # 결측값을 처리한다. 
         self.data[self.data.isin(self.naList)] = np.nan
+    
     def eda(self):
         # data의 row, column 수를 확인한다.
         rows, columns = self.data.shape
@@ -119,6 +123,8 @@ class PreProcess:
                     ftable[i] = int(ftable[i])
                 for i in ftableProp.keys():
                     ftableProp[i] = float(ftableProp[i])
+                codeCheckCat = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==columnName), "코드대분류(그룹코드ID)"].tolist()[0]
+                codeCheckDocs = self.codeDocs[self.codeDocs["코드 대분류(그룹코드ID)"]==codeCheckCat]
                 summary["classCount_Def"] = {item : ftable.get(item) for item in set(ftable)&set(codeCheckDocs["코드값"])}
                 summary['classProp_Def'] = {item : ftableProp.get(item) for item in set(ftable)&set(codeCheckDocs["코드값"])}
                 summary["classCount_Undef"] = {item : ftable.get(item) for item in set(ftable)-set(codeCheckDocs["코드값"])}
