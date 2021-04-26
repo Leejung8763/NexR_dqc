@@ -126,7 +126,7 @@ class PreProcess:
                     ftableProp[i] = float(ftableProp[i])
                 codeCheckCat = self.colDocs.loc[(self.colDocs["테이블명(영문)"]==self.fileName)&(self.colDocs["컬럼명"]==colName), "코드대분류(그룹코드ID)"].tolist()[0]
                 codeCheckDocs = self.codeDocs[self.codeDocs["코드대분류(그룹코드ID)"]==codeCheckCat]
-                summary["class"] = list(codeCheckDocs["코드값"].unique())
+                summary["classDefined"] = list(codeCheckDocs["코드값"].unique())
                 summary["classCount"] = ftable
                 summary['classProp'] = ftableProp
                 summary["nullCount"] = int(self.data[colName].isnull().sum())
@@ -176,6 +176,7 @@ class PreProcess:
                 else:
 #                     # class proportion 자리수 해결하는 코드
 #                     classPropTmp = dict(zip(list(dataSummary["classProp"].keys()), np.round(list(dataSummary["classProp"].values()),2)))
+                    classUndefined = {key: value for key, value in self.edaResult[columnType][colName]["classCount"].items() if key not in self.edaResult[columnType][colName]["classDefined"]}
                     tempDf = pd.DataFrame(
                         np.array(
                             (
@@ -196,6 +197,20 @@ class PreProcess:
                              "NULL수", "NULL%", "적재건수"]
                         ],
                     )
+                    if (len(self.edaResult[columnType][colName]["classDefined"]) > 0)&(len(classUndefined) > 0):
+                        tempDf2 = pd.DataFrame(
+                            np.array(
+                                (
+                                    ", ".join(classUndefined.keys()),
+                                    round(sum(classUndefined.values()) / len(self.data) * 100, 2)
+                                )
+                            ).reshape(1,2),
+                            columns = [
+                                ["범주형 대상"] * 2,
+                                ["정의된 범주 외", "정의된 범주 외%"]
+                            ]
+                        )
+                        tempDf = pd.concat((tempDf, tempDf2), axis=1)
                 self.result = pd.concat(
                     [self.result, tempDf], ignore_index=True
                 ).reindex(columns=column)
@@ -208,20 +223,18 @@ class PreProcess:
             
         json.dump(self.overview, open(f"{os.path.join(outputPath, self.fileName)}/overview.json", "w"))
         json.dump(self.edaResult, open(f"{os.path.join(outputPath, self.fileName)}/edaResult.json", "w"))
-        
-        self.result.to_excel(f"{os.path.join(outputPath, self.fileName)}/dqcTable.xlsx")
+        # dcqTable 저장        
         writer = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName)}/dqcTable.xlsx", engine="xlsxwriter")
-
         self.result.to_excel(writer, sheet_name="Summary", encoding="utf-8-sig")
         for colName in self.edaResult["str"].keys():
             if (self.edaResult["str"][colName]["PK"]=="N")&(self.edaResult["str"][colName]["FK"]=="N"):
                 edaResult = copy.copy(self.edaResult["str"][colName])
-                edaResult.pop("class")
+                edaResult.pop("classDefined")
                 freqTable = pd.DataFrame(edaResult) if len(edaResult["classCount"]) > 0 else pd.DataFrame([edaResult])
                 freqTable = freqTable.reset_index(drop=False).rename(columns={"index":"class"})
                 freqTable = freqTable.loc[:, ["korName", "count", "class", "classCount", "classProp", "nullCount", "nullProp", "nullOnly"]]
-                if len(self.edaResult["str"][colName]["class"])>0 :
-                    freqTable.insert(3, "defined", [1 if i in self.edaResult["str"][colName]["class"] else 0 for i in freqTable["class"]]) ## 속도 개선 여지 존재
+                if len(self.edaResult["str"][colName]["classDefined"])>0 :
+                    freqTable.insert(3, "defined", [1 if i in self.edaResult["str"][colName]["classDefined"] else 0 for i in freqTable["class"]]) ## 속도 개선 여지 존재
                 if freqTable.nullOnly[0] == 1:
                     freqTable[["class", "classCount", "classProp"]] = np.nan
                 freqTable.to_excel(writer, sheet_name=colName, encoding="utf-8-sig", index=False)
