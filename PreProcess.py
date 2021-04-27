@@ -217,34 +217,47 @@ class PreProcess:
     def save(self, outputPath):
         if not os.path.exists(os.path.join(outputPath, self.fileName)):
             os.makedirs(os.path.join(outputPath, self.fileName))
+            os.makedirs(os.path.join(outputPath, self.fileName, "Numeric"))
+            os.makedirs(os.path.join(outputPath, self.fileName, "String"))
         else:
             print("지정된 저장폴더가 이미 존재합니다.")
             raise SystemExit           
             
         json.dump(self.overview, open(f"{os.path.join(outputPath, self.fileName)}/overview.json", "w"))
         json.dump(self.edaResult, open(f"{os.path.join(outputPath, self.fileName)}/edaResult.json", "w"))
-        # dcqTable 저장        
-        writer = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName)}/dqcTable.xlsx", engine="xlsxwriter")
-        self.result.to_excel(writer, sheet_name="Summary", encoding="utf-8-sig")
-        for colName in self.edaResult["str"].keys():
-            if (self.edaResult["str"][colName]["PK"]=="N")&(self.edaResult["str"][colName]["FK"]=="N"):
-                edaResult = copy.copy(self.edaResult["str"][colName])
-                edaResult.pop("classDefined")
-                freqTable = pd.DataFrame(edaResult) if len(edaResult["classCount"]) > 0 else pd.DataFrame([edaResult])
-                freqTable = freqTable.reset_index(drop=False).rename(columns={"index":"class"})
-                freqTable = freqTable.loc[:, ["korName", "count", "class", "classCount", "classProp", "nullCount", "nullProp", "nullOnly"]]
-                if len(self.edaResult["str"][colName]["classDefined"])>0 :
-                    freqTable.insert(3, "defined", [1 if i in self.edaResult["str"][colName]["classDefined"] else 0 for i in freqTable["class"]]) ## 속도 개선 여지 존재
-                if freqTable.nullOnly[0] == 1:
-                    freqTable[["class", "classCount", "classProp"]] = np.nan
-                freqTable.to_excel(writer, sheet_name=colName, encoding="utf-8-sig", index=False)
-                writeRow = len(freqTable)+2
-                # 각 범주별 연속형 변수 summary
-                if freqTable.nullOnly[0] == 0:
-                    for numColName in self.edaResult["num"].keys():
-                        summaryTable = self.data.groupby(colName).describe().reset_index(drop=False).rename(columns={colName:"class"})
-                        summaryTable = summaryTable.loc[:, [("class",""),("PWD_ERR_TMSCNT","min"),("PWD_ERR_TMSCNT","25%"),("PWD_ERR_TMSCNT","50%"),("PWD_ERR_TMSCNT","75%"),("PWD_ERR_TMSCNT","max"),("PWD_ERR_TMSCNT","mean"),("PWD_ERR_TMSCNT","std")]]
-                        summaryTable.to_excel(writer, sheet_name=colName, encoding="utf-8-sig", startrow=writeRow)
-                        writeRow += len(summaryTable)+2
-        #close the Pandas Excel writer and output the Excel file
-        writer.save()
+        # 전체 summary table 저장 
+        self.result.to_excel(f"{os.path.join(outputPath, self.fileName)}/summary_total.xlsx", encoding="utf-8-sig")
+        for colType in self.edaResult.keys():
+            for colName in self.edaResult[colType].keys():
+                # FK, PK가 아닌 String Var 리스트
+                strList = [col for col in self.edaResult["str"].keys() if (self.edaResult["str"][col].get("PK")=="N")&(self.edaResult["str"][col].get("FK")=="N")]
+                if colType == "num":
+                    # excel file 정의
+                    numWriter = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName, 'Numeric', colName)}.xlsx", engine="xlsxwriter")
+                    for col in strList:
+                        if self.edaResult["str"][col]["nullOnly"] == 0:
+                            summaryTable = self.data[[colName,col]].groupby(col).describe().reset_index(drop=False)
+                            summaryTable.columns = pd.MultiIndex.from_tuples(((col, "범주"),(colName, "빈도수"),(colName, "평균"),(colName, "표준편차"),(colName, "최소값"),(colName, "25%"),(colName, "50%"),(colName, "75%"),(colName, "최대값")))
+                            column = [
+                                [col] + [colName] * 8,
+                                ["범주", "빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]
+                            ]
+                            summaryTable = summaryTable.reindex(columns=column)
+                            summaryTable.to_excel(numWriter, sheet_name=col, encoding="utf-8-sig")
+                    numWriter.save()
+                elif colType == "str":
+                    if colName in strList:
+                        # excel file 정의
+                        strWriter = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName, 'String', colName)}.xlsx", engine="xlsxwriter")
+                        edaResult = copy.copy(self.edaResult["str"][colName])
+                        edaResult.pop("classDefined")
+                        freqTable = pd.DataFrame(edaResult) if len(edaResult["classCount"]) > 0 else pd.DataFrame([edaResult])
+                        freqTable = freqTable.reset_index(drop=False).rename(columns={"index":"class"})
+                        freqTable = freqTable.loc[:, ["korName", "count", "class", "classCount", "classProp", "nullCount", "nullProp", "nullOnly"]]
+                        if len(self.edaResult["str"][colName]["classDefined"])>0 :
+                            freqTable.insert(3, "defined", [1 if i in self.edaResult["str"][colName]["classDefined"] else 0 for i in freqTable["class"]]) ## 속도 개선 여지 존재
+                        if freqTable.nullOnly[0] == 1:
+                            freqTable[["class", "classCount", "classProp"]] = np.nan
+                        freqTable.to_excel(strWriter, sheet_name=colName, encoding="utf-8-sig", index=False)
+                        #close the Pandas Excel writer and output the Excel file
+                        strWriter.save()
