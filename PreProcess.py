@@ -228,22 +228,50 @@ class PreProcess:
         # 전체 summary table 저장 
         self.result.to_excel(f"{os.path.join(outputPath, self.fileName)}/summary_total.xlsx", encoding="utf-8-sig")
         for colType in self.edaResult.keys():
+            data = copy.copy(self.data)
             for colName in self.edaResult[colType].keys():
                 # FK, PK가 아닌 String Var 리스트
                 strList = [col for col in self.edaResult["str"].keys() if (self.edaResult["str"][col].get("PK")=="N")&(self.edaResult["str"][col].get("FK")=="N")]
                 if colType == "num":
                     # excel file 정의
                     numWriter = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName, 'Numeric', colName)}.xlsx", engine="xlsxwriter")
-                    for col in strList:
-                        if self.edaResult["str"][col]["nullOnly"] == 0:
-                            summaryTable = self.data[[colName,col]].groupby(col).describe().reset_index(drop=False)
-                            summaryTable.columns = pd.MultiIndex.from_tuples(((col, "범주"),(colName, "빈도수"),(colName, "평균"),(colName, "표준편차"),(colName, "최소값"),(colName, "25%"),(colName, "50%"),(colName, "75%"),(colName, "최대값")))
-                            column = [
-                                [col] + [colName] * 8,
-                                ["범주", "빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]
-                            ]
-                            summaryTable = summaryTable.reindex(columns=column)
-                            summaryTable.to_excel(numWriter, sheet_name=col, encoding="utf-8-sig")
+                    summary = pd.DataFrame(data[colName].describe()).T
+                    summary.columns = ["빈도수", "평균", "표준편차", "최소값", "25%", "50%", "75%", "최대값"]
+                    summary = summary.loc[:, ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]]
+                    summary.to_excel(numWriter, sheet_name="summary", encoding="utf-8-sig")
+                    # 시간 필터
+                    if data.select_dtypes(include="datetime").shape[1] > 0:
+                        for time in data.select_dtypes(include="datetime").columns:
+                            if data[time].isnull().sum() != len(data):
+                                data["year"] = data[time].dt.year
+                                data["month"] = data[time].dt.month
+                                data["day"] = data[time].dt.day
+                                data["hour"] = data[time].dt.hour
+                                writeRow = 0
+                                for timeFilter in [["year"], ["year", "month"], ["year", "month", "day"], ["year", "month", "day", "hour"]]:
+                                    timeFilterData = data[list(self.edaResult["num"].keys())+timeFilter].groupby(timeFilter).describe()
+                                    timeFilterData.columns = pd.MultiIndex.from_tuples(((colName, "빈도수"),(colName, "평균"),(colName, "표준편차"),(colName, "최소값"),(colName, "25%"),(colName, "50%"),(colName, "75%"),(colName, "최대값")))
+                                    # column index 정의
+                                    column = [
+                                        [colName] * 8,
+                                        ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]
+                                    ]
+                                    timeFilterData = timeFilterData.reindex(columns=column)
+                                    timeFilterData.to_excel(numWriter, sheet_name=time, encoding="utf-8-sig", startrow=writeRow)
+                                    writeRow += len(timeFilterData)+4 
+                    # 범주 필터
+                    if data.select_dtypes(include="string").shape[1] > 0:
+                        for col in strList:
+                            if self.edaResult["str"][col]["nullOnly"] == 0:
+                                summaryTable = self.data[[colName,col]].groupby(col).describe()
+                                summaryTable.columns = pd.MultiIndex.from_tuples(((colName, "빈도수"),(colName, "평균"),(colName, "표준편차"),(colName, "최소값"),(colName, "25%"),(colName, "50%"),(colName, "75%"),(colName, "최대값")))
+                                # column index 정의
+                                column = [
+                                    [colName] * 8,
+                                    ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]
+                                ]
+                                summaryTable = summaryTable.reindex(columns=column)
+                                summaryTable.to_excel(numWriter, sheet_name=col, encoding="utf-8-sig")
                     numWriter.save()
                 elif colType == "str":
                     if colName in strList:
