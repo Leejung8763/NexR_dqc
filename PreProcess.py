@@ -195,7 +195,7 @@ class PreProcess:
                     eachSummary = eachSummary.loc[:, ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]]
                     self.result["eachSummary"][colType][colName] = {"base": eachSummary}
                     # group by time
-                    if self.data.select_dtypes(include="datetime").shape[1] > 0:
+                    if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.data.select_dtypes(include="datetime").shape[1] > 0):
                         data = copy.copy(self.data)
                         for timeCol in self.data.select_dtypes(include="datetime").columns:
                             if self.data[timeCol].isnull().sum() != len(self.data):
@@ -205,7 +205,7 @@ class PreProcess:
                                 data[f"{timeCol}_Hour"] = self.data[timeCol].dt.hour
                                 self.result["eachSummary"][colType][colName][timeCol] = dict()
                                 for timeFilter in [["Year"], ["Year", "Month"], ["Year", "Month", "Day"], ["Year", "Month", "Day", "Hour"]]:
-                                    timeGroupbyData = data[list(self.result["edaResult"]["Numeric"].keys())+[f"{timeCol}_{name}" for name in timeFilter]].groupby([f"{timeCol}_{name}" for name in timeFilter]).describe()
+                                    timeGroupbyData = data[list(self.result["edaResult"][colType].keys())+[f"{timeCol}_{name}" for name in timeFilter]].groupby([f"{timeCol}_{name}" for name in timeFilter]).describe()
                                     timeGroupbyData.columns = pd.MultiIndex.from_tuples(((colName, "빈도수"),(colName, "평균"),(colName, "표준편차"),(colName, "최소값"),(colName, "25%"),(colName, "50%"),(colName, "75%"),(colName, "최대값")))
                                     # column index 정의
                                     timeGroupbyCol = [[colName]*8, ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]]
@@ -254,6 +254,7 @@ class PreProcess:
                             ]
                         )
                         totSummary = pd.concat((totSummary, totSummary2), axis=1)
+                    # FK, PK가 아닌 String Var    
                     if colName in strList:
                         # excel file 정의
                         edaResult = copy.copy(self.result["edaResult"]["String"][colName])
@@ -265,7 +266,26 @@ class PreProcess:
                             freqTable.insert(3, "defined", [1 if i in self.result["edaResult"]["String"][colName]["classDefined"] else 0 for i in freqTable["class"]]) ## 속도 개선 여지 존재
                         if freqTable.nullOnly[0] == 1:
                             freqTable[["class", "classCount", "classProp"]] = np.nan
-                        self.result["eachSummary"][colType][colName]= freqTable
+                        self.result["eachSummary"][colType][colName]= {"base": freqTable}
+                        # group by time
+                        if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.data.select_dtypes(include="datetime").shape[1] > 0):
+                            data = copy.copy(self.data)
+                            for timeCol in self.data.select_dtypes(include="datetime").columns:
+                                if self.data[timeCol].isnull().sum() != len(self.data):
+                                    data[f"{timeCol}_Year"] = self.data[timeCol].dt.year
+                                    data[f"{timeCol}_Month"] = self.data[timeCol].dt.month
+                                    data[f"{timeCol}_Day"] = self.data[timeCol].dt.day
+                                    data[f"{timeCol}_Hour"] = self.data[timeCol].dt.hour
+                                    self.result["eachSummary"][colType][colName][timeCol] = dict()
+                                    for timeFilter in [["Year"], ["Year", "Month"], ["Year", "Month", "Day"], ["Year", "Month", "Day", "Hour"]]:
+                                        timeGroupbyCount = data[[colName]+[f"{timeCol}_{name}" for name in timeFilter]].groupby([f"{timeCol}_{name}" for name in timeFilter]+[colName]).size().unstack()
+                                        timeGroupbyCount.columns = pd.MultiIndex.from_product([[timeGroupbyCount.columns.name], timeGroupbyCount.columns], names=None)
+                                        timeGroupbyMode = data.groupby([f"{timeCol}_{name}" for name in timeFilter])[[colName]].agg(pd.Series.mode)
+                                        timeGroupbyMode.columns = pd.MultiIndex.from_product([timeGroupbyMode.columns, ["최빈값"]], names=None)
+                                        timeGroupbyData = pd.merge(timeGroupbyCount, timeGroupbyMode, left_index=True, right_index=True)
+                                        timeGroupbyData.loc[:, (colName, "최빈값")] = [",".join(i) if type(i) != str else i for i in timeGroupbyMode[colName]["최빈값"].tolist()]
+                                        self.result["eachSummary"][colType][colName][timeCol]["_".join(timeFilter)] = timeGroupbyData
+
                 self.result["totalSummary"] = pd.concat([self.result["totalSummary"], totSummary], ignore_index=True).reindex(columns=totSummaryCol)
     
     def save(self, outputPath):
@@ -281,26 +301,18 @@ class PreProcess:
             self.result["totalSummary"].to_excel(f"{os.path.join(outputPath, self.fileName)}/total_summary.xlsx", engine="xlsxwriter")
             # each summary 저장
             for colType in self.result["eachSummary"].keys():
-                if colType == "Numeric":
-                    for colName in self.result["eachSummary"][colType].keys():
-                        # save excel file
-                        numWriter = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName, colType, colName)}.xlsx", engine="xlsxwriter")
-                        for sheetName in self.result["eachSummary"][colType][colName].keys():
-                            if sheetName not in self.data.select_dtypes(include="datetime64").columns:
-                                self.result["eachSummary"][colType][colName][sheetName].to_excel(numWriter, sheet_name=sheetName, encoding="utf-8-sig")
-                            else:
-                                writeRow = 0
-                                for timeFilter in self.result["eachSummary"][colType][colName][sheetName].keys():
-                                    self.result["eachSummary"][colType][colName][sheetName][timeFilter].to_excel(numWriter, sheet_name=sheetName, encoding="utf-8-sig", startrow = writeRow)
-                                    writeRow += len(self.result["eachSummary"][colType][colName][sheetName][timeFilter]) + 4
-                        numWriter.save()
-                elif colType == "String":
-                    for colName in self.result["eachSummary"][colType].keys():
-                        # save excel file
-                        strWriter = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName, colType, colName)}.xlsx", engine="xlsxwriter")
-                        self.result["eachSummary"][colType][colName].to_excel(strWriter, sheet_name=colName, encoding="utf-8-sig", index=False)
-                        #close the Pandas Excel writer and output the Excel file
-                        strWriter.save()
+                for colName in self.result["eachSummary"][colType].keys():
+                    # save excel file
+                    xlsxWriter = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName, colType, colName)}.xlsx", engine="xlsxwriter")
+                    for sheetName in self.result["eachSummary"][colType][colName].keys():
+                        if sheetName not in self.data.select_dtypes(include="datetime64").columns:
+                            self.result["eachSummary"][colType][colName][sheetName].to_excel(xlsxWriter, sheet_name=sheetName, encoding="utf-8-sig")
+                        else:
+                            writeRow = 0
+                            for timeFilter in self.result["eachSummary"][colType][colName][sheetName].keys():
+                                self.result["eachSummary"][colType][colName][sheetName][timeFilter].to_excel(xlsxWriter, sheet_name=sheetName, encoding="utf-8-sig", startrow = writeRow)
+                                writeRow += len(self.result["eachSummary"][colType][colName][sheetName][timeFilter]) + 4
+                    xlsxWriter.save()
         else:
             print("지정된 저장폴더가 이미 존재합니다.")
             raise SystemExit
