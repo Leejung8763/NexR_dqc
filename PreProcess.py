@@ -1,9 +1,7 @@
-import os, re
-import json
+import os, re, json, copy, time, datetime
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
-import copy
 
 class PreProcess:
 
@@ -289,21 +287,24 @@ class PreProcess:
                 self.result["totalSummary"] = pd.concat([self.result["totalSummary"], totSummary], ignore_index=True).reindex(columns=totSummaryCol)
     
     def save(self, outputPath):
-        if not os.path.exists(os.path.join(outputPath, self.fileName)):
+        saveTime = datetime.datetime.fromtimestamp(time.time()).strftime("%Y%m%d%H%M")
+        dbName = self.tableDocs.loc[self.tableDocs["테이블명(영문)"]==self.fileName, "스키마명"].tolist()[0]
+        savePath = f"{outputPath}/{dbName}_{self.fileName}_{saveTime}"
+        if not os.path.exists(savePath):
             # 폴더 생성
-            os.makedirs(os.path.join(outputPath, self.fileName))
-            os.makedirs(os.path.join(outputPath, self.fileName, "Numeric"))
-            os.makedirs(os.path.join(outputPath, self.fileName, "String"))
+            os.makedirs(savePath)
+            os.makedirs(os.path.join(savePath, "Numeric"))
+            os.makedirs(os.path.join(savePath, "String"))
             # Json 파일 저장
-            json.dump(self.result["overview"], open(f"{os.path.join(outputPath, self.fileName)}/overview.json", "w"))
-            json.dump(self.result["edaResult"], open(f"{os.path.join(outputPath, self.fileName)}/edaResult.json", "w"))
+            json.dump(self.result["overview"], open(f"{os.path.join(savePath)}/overview.json", "w"))
+            json.dump(self.result["edaResult"], open(f"{os.path.join(savePath)}/edaResult.json", "w"))
             # total summary 저장
-            self.result["totalSummary"].to_excel(f"{os.path.join(outputPath, self.fileName)}/total_summary.xlsx", engine="xlsxwriter")
+            self.result["totalSummary"].to_excel(f"{os.path.join(savePath)}/total_summary.xlsx", engine="xlsxwriter")
             # each summary 저장
             for colType in self.result["eachSummary"].keys():
                 for colName in self.result["eachSummary"][colType].keys():
                     # save excel file
-                    xlsxWriter = pd.ExcelWriter(f"{os.path.join(outputPath, self.fileName, colType, colName)}.xlsx", engine="xlsxwriter")
+                    xlsxWriter = pd.ExcelWriter(f"{os.path.join(savePath, colType, colName)}.xlsx", engine="xlsxwriter")
                     for sheetName in self.result["eachSummary"][colType][colName].keys():
                         if sheetName not in self.data.select_dtypes(include="datetime64").columns:
                             self.result["eachSummary"][colType][colName][sheetName].to_excel(xlsxWriter, sheet_name=sheetName, encoding="utf-8-sig")
