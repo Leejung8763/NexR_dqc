@@ -1,0 +1,6 @@
+/editTest/
+/example/
+*.ipynb
+
+/.ipynb_checkpoints/
+/__pycache__/
