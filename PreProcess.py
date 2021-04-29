@@ -2,7 +2,7 @@ import os, re
 import json
 import numpy as np
 import pandas as pd
-# import pyarrow.parquet as pq
+import pyarrow.parquet as pq
 import copy
 
 class PreProcess:
@@ -42,8 +42,7 @@ class PreProcess:
 
             # data loading
             if ".csv" in inputPath:
-                self.data = pd.read_csv(inputPath, dtype={key: value for key, value in self.dbType.items() if value=="string"}, parse_dates=[key for key, value in self.dbType.items() if value=="datetime64"], infer_datetime_format=True, na_values=self.naList)
-            # 나중에 추가할 데이터 형식
+                self.data = pd.read_csv(inputPath, dtype={key: value for key, value in self.dbType.items() if value=="string"}, parse_dates=[key for key, value in self.dbType.items() if value=="datetime64"], infer_datetime_format=True, na_values=self.naList)            
     #             elif ".parquet" in inputPath:
     #                 self.data = pq.read_pandas(inputPath).to_pandas()
     #                 self.fileName = fileName.split(".parquet")[0]
@@ -147,15 +146,14 @@ class PreProcess:
         """
         # MUlti index 세팅
         totSummaryCol = [
-            ["컬럼"] * 3 + ["연속형 대상"] * 7 + ["범주형 대상"] * 4 + ["공통"] * 5,
+            ["컬럼"] * 3 + ["연속형 대상"] * 7 + ["범주형 대상"] * 4 + ["공통"] * 4,
             ["컬럼명", "한글명", "타입", 
              "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차",
              "범주 수", "정의된 범주 외", "정의된 범주 외%", "최빈값",
-             "NULL값", "NULL수", "NULL%", "적재건수", "적재건수%"]
+             "NULL값", "NULL수", "NULL%", "적재건수"]
         ]
         # total summary table
         self.result["totalSummary"] = pd.DataFrame(columns=totSummaryCol)
-        data = copy.copy(self.data)
         # each summary table
         self.result["eachSummary"] = dict({"Numeric":dict(), "String":dict()})
         # FK, PK가 아닌 String Var 리스트
@@ -192,21 +190,22 @@ class PreProcess:
                     )
                     # each summary
                     # base
-                    eachSummary = pd.DataFrame(data[colName].describe()).T
+                    eachSummary = pd.DataFrame(self.data[colName].describe()).T
                     eachSummary.columns = ["빈도수", "평균", "표준편차", "최소값", "25%", "50%", "75%", "최대값"]
                     eachSummary = eachSummary.loc[:, ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]]
                     self.result["eachSummary"][colType][colName] = {"base": eachSummary}
                     # group by time
                     if self.data.select_dtypes(include="datetime").shape[1] > 0:
+                        data = copy.copy(self.data)
                         for timeCol in self.data.select_dtypes(include="datetime").columns:
                             if self.data[timeCol].isnull().sum() != len(self.data):
-                                data["year"] = self.data[timeCol].dt.year
-                                data["month"] = self.data[timeCol].dt.month
-                                data["day"] = self.data[timeCol].dt.day
-                                data["hour"] = self.data[timeCol].dt.hour
+                                data[f"{timeCol}_Year"] = self.data[timeCol].dt.year
+                                data[f"{timeCol}_Month"] = self.data[timeCol].dt.month
+                                data[f"{timeCol}_Day"] = self.data[timeCol].dt.day
+                                data[f"{timeCol}_Hour"] = self.data[timeCol].dt.hour
                                 self.result["eachSummary"][colType][colName][timeCol] = dict()
-                                for timeFilter in [["year"], ["year", "month"], ["year", "month", "day"], ["year", "month", "day", "hour"]]:
-                                    timeGroupbyData = data[list(self.result["edaResult"]["Numeric"].keys())+timeFilter].groupby(timeFilter).describe()
+                                for timeFilter in [["Year"], ["Year", "Month"], ["Year", "Month", "Day"], ["Year", "Month", "Day", "Hour"]]:
+                                    timeGroupbyData = data[list(self.result["edaResult"]["Numeric"].keys())+[f"{timeCol}_{name}" for name in timeFilter]].groupby([f"{timeCol}_{name}" for name in timeFilter]).describe()
                                     timeGroupbyData.columns = pd.MultiIndex.from_tuples(((colName, "빈도수"),(colName, "평균"),(colName, "표준편차"),(colName, "최소값"),(colName, "25%"),(colName, "50%"),(colName, "75%"),(colName, "최대값")))
                                     # column index 정의
                                     timeGroupbyCol = [[colName]*8, ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]]
@@ -230,7 +229,7 @@ class PreProcess:
                                 dataSample["korName"],
                                 colType,
                                 len(dataSample["classCount"]),
-                                re.sub("\(|\)", "", str(list(dataSample["classCount"].items())[0])) if (len(list(dataSample["classCount"].items())) > 0)&(self.result["edaResult"]["String"][colName]["PK"]=="N")&(self.result["edaResult"]["String"][colName]["FK"]=="N") else "",
+                                ", ".join(self.data[colName].mode().tolist()) if (len(list(dataSample["classCount"].items()))!=dataSample["count"])&(len(list(dataSample["classCount"].items())) > 0)&(self.result["edaResult"]["String"][colName]["PK"]=="N")&(self.result["edaResult"]["String"][colName]["FK"]=="N") else "",
                                 dataSample["nullCount"],
                                 round(dataSample["nullCount"] / len(self.data) * 100, 2),
                                 dataSample["count"],
