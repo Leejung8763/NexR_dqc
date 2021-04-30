@@ -24,9 +24,14 @@ git clone https://github.com/Leejung8763/DataQualityCheck.git
 pip install -r requirements.txt 
 ```
 
+### folder setting
+```
+data/
+├── documents/
+└── data.csv
+```   
+    
 ## 예제 실행 
 ```
-cd example
-
-python src.py 
+python sampleCode.py 
 ```
