@@ -191,10 +191,10 @@ class PreProcess:
                     eachSummary = pd.DataFrame(self.data[colName].describe()).T
                     eachSummary.columns = ["빈도수", "평균", "표준편차", "최소값", "25%", "50%", "75%", "최대값"]
                     eachSummary = eachSummary.loc[:, ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]]
-                    self.result["eachSummary"][colType][colName] = {"base": eachSummary}
+                    self.result["eachSummary"][colType][colName] = {colName: {"base": eachSummary}}
                     # correlation
-                    if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.data.select_dtypes(include=np.number).shape[1] >= 2):
-                        self.result["eachSummary"][colType][colName]["correlation"] = self.data.corr()
+                    if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.data.select_dtypes(include=np.number).shape[1] > 1):
+                        self.result["eachSummary"][colType][colName][colName]["correlation"] = self.data.corr()
                     # group by time
                     if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.data.select_dtypes(include="datetime").shape[1] > 0):
                         data = copy.copy(self.data)
@@ -219,7 +219,11 @@ class PreProcess:
                                 strGroupbyData.columns = pd.MultiIndex.from_tuples(((colName, "빈도수"),(colName, "평균"),(colName, "표준편차"),(colName, "최소값"),(colName, "25%"),(colName, "50%"),(colName, "75%"),(colName, "최대값")))
                                 # column index 정의
                                 strGroupbyCol = [[colName] * 8, ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]]
-                                self.result["eachSummary"][colType][colName][col] = strGroupbyData.reindex(columns=strGroupbyCol)
+                                self.result["eachSummary"][colType][colName][col] = dict()
+                                self.result["eachSummary"][colType][colName][col]["base"] = strGroupbyData.reindex(columns=strGroupbyCol)
+                                # correlation
+                                if (self.data.select_dtypes(include=np.number).shape[1] > 1):
+                                    self.result["eachSummary"][colType][colName][col]["correlation"] = self.data.groupby(col).corr()
                 elif colType == "String":
                     classUndefined = {key: value for key, value in self.result["edaResult"][colType][colName]["classCount"].items() if key not in self.result["edaResult"][colType][colName]["classDefined"]}
                     # total summary
@@ -261,13 +265,15 @@ class PreProcess:
                         edaResult = copy.copy(self.result["edaResult"]["String"][colName])
                         edaResult.pop("classDefined")
                         freqTable = pd.DataFrame(edaResult) if len(edaResult["classCount"]) > 0 else pd.DataFrame([edaResult])
-                        freqTable = freqTable.reset_index(drop=False).rename(columns={"index":"class"})
-                        freqTable = freqTable.loc[:, ["korName", "count", "class", "classCount", "classProp", "nullCount", "nullProp", "nullOnly"]]
+                        freqTable = freqTable.loc[:, ["korName", "classCount", "count", "classProp", "nullCount", "nullProp", "nullOnly"]]
                         if len(self.result["edaResult"]["String"][colName]["classDefined"])>0 :
-                            freqTable.insert(3, "defined", [1 if i in self.result["edaResult"]["String"][colName]["classDefined"] else 0 for i in freqTable["class"]]) ## 속도 개선 여지 존재
+                            freqTable.insert(3, "defined", [1 if i in self.result["edaResult"]["String"][colName]["classDefined"] else 0 for i in freqTable.index]) ## 속도 개선 여지 존재
                         if freqTable.nullOnly[0] == 1:
-                            freqTable[["class", "classCount", "classProp"]] = np.nan
-                        self.result["eachSummary"][colType][colName]= {"base": freqTable}
+                            freqTable[["classCount", "classProp"]] = np.nan
+                        freqTable.index = pd.MultiIndex.from_tuples([i for i in zip(freqTable.korName, freqTable.index)])
+                        freqTable.drop("korName", axis=1, inplace=True)
+                        freqTable.rename(columns={"defined":"범주 정의 여부", "count":"적재건수", "classCount":"빈도수", "classProp":"비율", "nullCount":"결측치 수", "nullProp":"결측 비율", "nullOnly":"전체 결측 여부"}, inplace=True)
+                        self.result["eachSummary"][colType][colName]= {colName: {"base": freqTable}}
                         # group by time
                         if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.data.select_dtypes(include="datetime").shape[1] > 0):
                             data = copy.copy(self.data)
@@ -293,7 +299,8 @@ class PreProcess:
                             if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.result["edaResult"][colType][strCol]["nullOnly"] == 0):
                                 strGroupbyCount = pd.crosstab(self.data[colName], self.data[strCol], margins=True, margins_name="합계")
                                 strGroupbyCount.columns = pd.MultiIndex.from_product([[strCol], strGroupbyCount.columns], names=[None, None])
-                                self.result["eachSummary"][colType][colName][strCol] = strGroupbyCount
+                                self.result["eachSummary"][colType][colName][strCol] = dict()
+                                self.result["eachSummary"][colType][colName][strCol]["base"] = strGroupbyCount
                 self.result["totalSummary"] = pd.concat([self.result["totalSummary"], totSummary], ignore_index=True).reindex(columns=totSummaryCol)
     
     def save(self, outputPath):
@@ -316,10 +323,15 @@ class PreProcess:
                     # save excel file
                     xlsxWriter = pd.ExcelWriter(f"{os.path.join(savePath, colType, colName)}.xlsx", engine="xlsxwriter")
                     for sheetName in self.result["eachSummary"][colType][colName].keys():
+                        writeRow = 0
                         if sheetName not in self.data.select_dtypes(include="datetime64").columns:
-                            self.result["eachSummary"][colType][colName][sheetName].to_excel(xlsxWriter, sheet_name=sheetName, encoding="utf-8-sig")
+                            for key in self.result["eachSummary"][colType][colName][sheetName].keys():
+                                self.result["eachSummary"][colType][colName][sheetName][key].to_excel(xlsxWriter, sheet_name=sheetName, encoding="utf-8-sig", startrow = writeRow)
+                                if colName == sheetName:
+                                    writeRow += len(self.result["eachSummary"][colType][colName][sheetName][key]) + 2
+                                else: 
+                                    writeRow += len(self.result["eachSummary"][colType][colName][sheetName][key]) + 4
                         else:
-                            writeRow = 0
                             for timeFilter in self.result["eachSummary"][colType][colName][sheetName].keys():
                                 self.result["eachSummary"][colType][colName][sheetName][timeFilter].to_excel(xlsxWriter, sheet_name=sheetName, encoding="utf-8-sig", startrow = writeRow)
                                 writeRow += len(self.result["eachSummary"][colType][colName][sheetName][timeFilter]) + 4
