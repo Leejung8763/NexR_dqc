@@ -8,7 +8,9 @@ class PreProcess:
     def __init__(self, inputPath, docsPath):
         # 공통 결측치를 설정 
         self.naList = ["?", "na", "null", "Null", "NULL", " ", "[NULL]"]
-        addNa = input(f"결측값을 추가할 수 있습니다. \n기본 설정된 결측값: {self.naList} \n추가하고 싶은 결측값을 작성해주십시오:")
+        addNa = input(
+            f"결측값을 추가할 수 있습니다. \n기본 설정된 결측값: {self.naList} \n추가하고 싶은 결측값을 작성해주십시오:"
+        )
         if len(addNa) != 0:
             self.naList += addNa.replace(" ", "").split(sep=",")
             self.naList = list(set(self.naList))
@@ -35,6 +37,7 @@ class PreProcess:
             self.colDocs = self.colDocs.drop(["NewDataType","DBMS","DataType"], axis=1)
             self.colDocs = self.colDocs.drop_duplicates()
             self.dbType = dict(zip(self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, "컬럼명"], self.colDocs.loc[self.colDocs["테이블명(영문)"]==self.fileName, "PyDataType"]))
+
             # data loading
             if ".csv" in inputPath:
                 self.data = pd.read_csv(inputPath, dtype={key: value for key, value in self.dbType.items() if value=="string"}, parse_dates=[key for key, value in self.dbType.items() if value=="datetime64"], infer_datetime_format=True, na_values=self.naList)            
@@ -50,7 +53,9 @@ class PreProcess:
     def na_check(self):
         # 공통 결측치를 설정 
         self.naList = ["?", "na", "null", "Null", "NULL", " "]
-        addNa = input(f"결측값을 추가할 수 있습니다. \n기본 설정된 결측값: {self.naList} \n추가하고 싶은 결측값을 작성해주십시오:")
+        addNa = input(
+            f"결측값을 추가할 수 있습니다. \n기본 설정된 결측값: {self.naList} \n추가하고 싶은 결측값을 작성해주십시오:"
+        )
         if len(addNa) != 0:
             self.naList += addNa.replace(" ", "").split(sep=",")
             self.naList = list(set(self.naList))
@@ -187,6 +192,9 @@ class PreProcess:
                     eachSummary.columns = ["빈도수", "평균", "표준편차", "최소값", "25%", "50%", "75%", "최대값"]
                     eachSummary = eachSummary.loc[:, ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]]
                     self.result["eachSummary"][colType][colName] = {"base": eachSummary}
+                    # correlation
+                    if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.data.select_dtypes(include=np.number).shape[1] >= 2):
+                        self.result["eachSummary"][colType][colName]["correlation"] = self.data.corr()
                     # group by time
                     if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.data.select_dtypes(include="datetime").shape[1] > 0):
                         data = copy.copy(self.data)
@@ -204,7 +212,7 @@ class PreProcess:
                                     timeGroupbyCol = [[colName]*8, ["빈도수", "최소값", "25%", "50%", "75%", "최대값", "평균", "표준편차"]]
                                     self.result["eachSummary"][colType][colName][timeCol]["_".join(timeFilter)] = timeGroupbyData.reindex(columns=timeGroupbyCol)
                     # group by String
-                    if self.data.select_dtypes(include="string").shape[1] > 0:
+                    if (self.result["edaResult"][colType][colName]["nullOnly"] == 0)&(self.data.select_dtypes(include="string").shape[1] > 0):
                         for col in strList:
                             if self.result["edaResult"]["String"][col]["nullOnly"] == 0:
                                 strGroupbyData = self.data[[colName, col]].groupby(col).describe()
