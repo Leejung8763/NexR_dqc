@@ -1,7 +1,7 @@
 # DataQualiityCheck
 
 ## 요구사항
-- python >= 3.6.x
+- python >= 3.7.1
 - git 
 
 ## 설치
