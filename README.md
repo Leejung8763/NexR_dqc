@@ -1,7 +1,11 @@
-# DataQualiityCheck
+# NexR_dqc
 
 ## 요구사항
-- python >= 3.6.x
+- python >= 3.7.1
+- numpy
+- pandas==1.2.4
+- pyarrow
+- openpyxl
 - git 
 
 ## 설치
@@ -12,21 +16,18 @@ virtualenv pre_process
 
 cd pre_process 
 source bin/activate
+
+pip install NexR_dqc
 ```
 
-### git clone 
+### folder setting
 ```
-git clone https://github.com/Leejung8763/DataQualityCheck.git
-```
-
-### pip install 
-```
-pip install -r requirements.txt 
-```
-
+data/
+├── documents/
+└── data.csv
+```   
+    
 ## 예제 실행 
 ```
-cd example
-
-python src.py 
+python sampleCode.py 
 ```
