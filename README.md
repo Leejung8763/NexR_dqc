@@ -1,4 +1,5 @@
 # NexR_dqc
+<br><br>
 
 ## 요구사항
 - python >= 3.7.1
@@ -7,6 +8,7 @@
 - pyarrow
 - openpyxl
 - xlsxwriter
+<br>
 
 ## 설치
 
@@ -20,14 +22,32 @@ source bin/activate
 pip install NexR_dqc
 ```
 
-### folder setting
+### 폴더 구성
+- documents 하위 항목은 필수로 작성되어야 함
 ```
 data/
 ├── documents/
+│   ├── DBMS유형별_Datatype
+│   ├── 테이블정의서
+│   ├── 컬럼정의서
+│   └── 코드정의서
 └── data.csv
 ```   
-    
+<br>
+
 ## 예제 실행 
 ```
-python sampleCode.py 
+import sys
+from NexR_dqc import PreProcess 
+
+inputData = './sample.csv'
+docsPath = './documents'
+outputPath = '.'
+
+code = PreProcess.PreProcess(inputData, docsPath)
+
+code.summary()
+code.eda()
+code.save(outputPath)
 ```
+
