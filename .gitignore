@@ -1,6 +1,9 @@
 /editTest/
 /example/
-*.ipynb
-
+/*.egg-info/
+/build/
+/dist/
 /.ipynb_checkpoints/
 /__pycache__/
+
+*.ipynb
