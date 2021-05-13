@@ -1,11 +1,11 @@
 import sys
-from PreProcess import PreProcess 
+from NexR_dqc import PreProcess 
 
 inputData = './editTest/LOGIN_ID_MGT.csv'
 docsPath = './editTest/documents'
-outputPath = '.' 
+outputPath = '.'
 
-code = PreProcess(inputData, docsPath)
+code = PreProcess.PreProcess(inputData, docsPath)
 
 code.summary()
 code.eda()
