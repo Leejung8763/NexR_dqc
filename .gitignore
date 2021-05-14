@@ -5,5 +5,7 @@
 /dist/
 /.ipynb_checkpoints/
 /__pycache__/
+NexR_dqc/.ipynb_checkpoints/
+NexR_dqc/__pycache__/
 
 *.ipynb

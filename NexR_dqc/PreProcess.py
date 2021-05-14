@@ -2,6 +2,7 @@ import os, re, json, copy, time, datetime
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+from openpyxl import load_workbook, Workbook
 
 class PreProcess:
 
@@ -313,7 +314,7 @@ class PreProcess:
                                 self.result["eachSummary"][colType][colName][strCol]["base"] = strGroupbyCount
                 self.result["totalSummary"] = pd.concat([self.result["totalSummary"], totSummary], ignore_index=True).reindex(columns=totSummaryCol)
     
-    def save(self, outputPath):
+    def save(self, outputPath, **kwargs):
         saveTime = datetime.datetime.fromtimestamp(time.time()).strftime("%Y%m%d%H%M")
         dbName = self.tableDocs.loc[self.tableDocs["테이블명(영문)"]==self.fileName, "스키마명"].tolist()[0]
         savePath = f"{outputPath}/{dbName}_{self.fileName}_{saveTime}"
@@ -339,7 +340,7 @@ class PreProcess:
                     for sheetName in self.result["eachSummary"][colType][colName].keys():
                         lineDel[colType][colName][sheetName] = dict()
                         writeRow = 0
-                        delRow = [writeRow+2]
+                        delRow = [writeRow+3]
                         if sheetName not in self.data.select_dtypes(include="datetime64").columns:
                             for key in self.result["eachSummary"][colType][colName][sheetName].keys():
                                 self.result["eachSummary"][colType][colName][sheetName][key].to_excel(xlsxWriter, sheet_name=sheetName, encoding="utf-8-sig", startrow = writeRow)
@@ -348,19 +349,55 @@ class PreProcess:
                                     delCol = {}
                                 else: 
                                     writeRow += len(self.result["eachSummary"][colType][colName][sheetName][key]) + 4
-                                    delCol = [0]
-                                delRow += [writeRow+2]
+                                    delCol = [1]
+                                delRow += [writeRow+3]
                         else:
                             for timeFilter in self.result["eachSummary"][colType][colName][sheetName].keys():
                                 self.result["eachSummary"][colType][colName][sheetName][timeFilter].to_excel(xlsxWriter, sheet_name=sheetName, encoding="utf-8-sig", startrow = writeRow)
                                 writeRow += len(self.result["eachSummary"][colType][colName][sheetName][timeFilter]) + 4
                                 delCol = [1]
-                                delRow += [writeRow+2]
+                                delRow += [writeRow+3]
                         lineDel[colType][colName][sheetName]["col"] = delCol
                         lineDel[colType][colName][sheetName]["row"] = delRow
                     xlsxWriter.save()
+
             # 다시 엑셀 포멧팅 작업
-            
+            for fType in ["Numeric", "String"]:
+                fDir = f"{savePath}/{fType}"
+                fList = os.listdir(fDir)
+                fList = [x for x in fList if ".xlsx" in x]
+                for fName in fList:
+                    workBook = load_workbook(f"{fDir}/{fName}")
+                    for sheetName in workBook.sheetnames:
+                        if sheetName != fName[:(len(fName)-5)]:
+                            colDel = lineDel[fType][fName[:(len(fName)-5)]][sheetName]["col"]
+                            rowDel = lineDel[fType][fName[:(len(fName)-5)]][sheetName]["row"]
+                            if len(colDel) > 0:
+                                for col in colDel:
+                                    self.modify_cell(col=col, sheet=workBook[sheetName])
+                            if len(rowDel) > 0:
+                                rowEdit = 0
+                                for row in rowDel:
+                                    self.modify_cell(row=row+rowEdit, sheet=workBook[sheetName])
+                                    rowEdit += -1
+                    workBook.save(f"{fDir}/{fName}")
+                    
         else:
             print("지정된 저장폴더가 이미 존재합니다.")
             raise SystemExit
+            
+    def modify_cell(self, **kwargs):
+        if kwargs.get("col") is not None:
+            kwargs["sheet"].delete_cols(kwargs["col"])
+            for mcr in kwargs["sheet"].merged_cells:
+                if kwargs.get("col") < mcr.min_col:
+                    mcr.shift(col_shift=-1)
+                elif kwargs.get("col") <= mcr.max_col:
+                    mcr.shrink(right=1)
+        if kwargs.get("row") is not None:
+            kwargs["sheet"].delete_rows(kwargs["row"])
+            for mcr in kwargs["sheet"].merged_cells:
+                if kwargs.get("row") < mcr.min_row:
+                    mcr.shift(row_shift=-1)
+                elif kwargs.get("row") <= mcr.max_row:
+                    mcr.shrink(bottom=1)
